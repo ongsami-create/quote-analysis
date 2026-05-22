@@ -642,15 +642,15 @@
     </style>
 </head>
 <body>
-    <!-- Loading — OUTSIDE #app so it never blocks dialog renders -->
-    <div v-if="isLoading" class="loading-overlay">
-        <div class="loading-content">
-            <div class="spinner"></div>
-            <div>{{ loadingText }}</div>
-        </div>
-    </div>
-
     <div id="app">
+        <!-- Loading -->
+        <div v-if="isLoading" class="loading-overlay">
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <div>{{ loadingText }}</div>
+            </div>
+        </div>
+
         <!-- Header -->
         <header class="header">
             <div class="header-left">
