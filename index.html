@@ -799,7 +799,7 @@
                             <option v-for="folder in availableFolders" :key="folder.name" :value="folder.name">{{ folder.name }}</option>
                         </select>
                         <div v-if="isLoading" style="font-size: 12px; color: #999; margin-top: 4px;">加载中...</div>
-                        <div v-else-if="availableFolders && availableFolders.length === 0 && importForm.selectedFolder === ''" style="font-size: 12px; color: #e74c3c; margin-top: 4px;">⚠️ 无法加载用户列表，请检查网络或刷新页面重试</div>
+                        <div v-else-if="availableFolders.length === 0 && importForm.selectedFolder === ''" style="font-size: 12px; color: #e74c3c; margin-top: 4px;">⚠️ 无法加载用户列表，请检查网络或刷新页面重试</div>
                     </div>
 
                     <div class="form-group" style="margin-bottom: 20px;">
@@ -1373,8 +1373,8 @@
                 // Import Dialog
                 const importDialogVisible = ref(false);
                 const importForm = reactive({ fileId: '', selectedFile: null, overwrite: false, previewData: {}, selectedFolder: '' });
-                const availableFiles = ref([]);
-                const availableFolders = ref([]);
+                const availableFiles = reactive([]);
+                const availableFolders = reactive([]);
 
                 // Edit Dialog
                 const editDialogVisible = ref(false);
@@ -1504,8 +1504,8 @@
                     importForm.overwrite = false;
                     importForm.previewData = {};
                     importForm.selectedFolder = '';
-                    availableFiles.value = [];
-                    availableFolders.value = [];
+                    availableFiles.splice(0, availableFiles.length);
+                    availableFolders.splice(0, availableFolders.length);
                     loadingText.value = '正在加载用户列表...';
                     isLoading.value = true;
                     try {
@@ -1515,11 +1515,19 @@
                         if (!resp.ok) throw new Error('HTTP ' + resp.status);
                         const result = await resp.json();
                         if (result.success && Array.isArray(result.folders)) {
-                            availableFolders.value = result.folders;
-                            console.log('[Import] Loaded folders:', result.folders.length);
-                        } else {
-                            availableFolders.value = [];
-                        }
+                    availableFolders.splice(0, availableFolders.length);
+                    if (result.success && Array.isArray(result.folders)) {
+                        result.folders.forEach(f => availableFolders.push(f));
+                        console.log('[Import] Loaded folders:', result.folders.length);
+                    } else {
+                        availableFolders.splice(0, availableFolders.length);
+                    }
+                } catch (e) {
+                    console.error('[Import] list_user_folders error:', e);
+                    availableFolders.splice(0, availableFolders.length);
+                } finally {
+                    isLoading.value = false;
+                }
                     } catch (e) {
                         console.error('[Import] list_user_folders error:', e);
                         availableFolders.value = [];
@@ -1548,11 +1556,19 @@
                         }
                     } catch (e) {
                         console.error('[Import] list_user_quote_files error:', e);
-                        availableFiles.value = [];
-                    } finally {
-                        isLoading.value = false;
+                    availableFiles.splice(0, availableFiles.length);
+                    if (result.success && Array.isArray(result.files)) {
+                        result.files.forEach(f => availableFiles.push(f));
+                    } else {
+                        availableFiles.splice(0, availableFiles.length);
                     }
-                };
+                } catch (e) {
+                    console.error('[Import] list_user_quote_files error:', e);
+                    availableFiles.splice(0, availableFiles.length);
+                } finally {
+                    isLoading.value = false;
+                }
+            };
 
                 const selectImportFile = async (file) => {
                     importForm.fileId = file.id;
