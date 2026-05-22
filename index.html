@@ -1479,48 +1479,105 @@
                     }
                 };
 
-                const showImportDialog = () => {
+                const showImportDialog = async () => {
                     importDialogVisible.value = true;
                     importForm.fileId = '';
                     importForm.selectedFile = null;
                     importForm.overwrite = false;
                     importForm.previewData = {};
-                    availableFiles.value = [
-                        { id: 'file1', name: 'test00.json', modifiedTime: '2026-05-18 10:30' },
-                        { id: 'file2', name: 'test01.json', modifiedTime: '2026-05-17 14:20' },
-                        { id: 'file3', name: 'test02.json', modifiedTime: '2026-05-16 09:15' }
-                    ];
+                    loadingText.value = '正在加载云端文件...';
+                    isLoading.value = true;
+                    try {
+                        const result = await gasCall('list_quote_files');
+                        if (result.success && result.files) {
+                            availableFiles.value = result.files;
+                        } else {
+                            availableFiles.value = [];
+                        }
+                    } catch (e) {
+                        availableFiles.value = [];
+                    } finally {
+                        isLoading.value = false;
+                    }
                 };
 
-                const selectImportFile = (file) => {
+                const selectImportFile = async (file) => {
                     importForm.fileId = file.id;
                     importForm.selectedFile = file;
-                    importForm.previewData = {
-                        customerName: file.name === 'test00.json' ? '陈大明' : file.name === 'test01.json' ? '李小红' : '王大明',
-                        totalSales: file.name === 'test00.json' ? 50000 : file.name === 'test01.json' ? 35000 : 80000,
-                        debtPercent: file.name === 'test00.json' ? 35.5 : file.name === 'test01.json' ? 15 : 50
-                    };
+                    try {
+                        const result = await gasCall('read_quote_file', { fileId: file.id });
+                        if (result.success && result.data) {
+                            importForm.previewData = {
+                                customerName: result.data.customer?.name || result.data.customerName || file.name.replace('.json', ''),
+                                totalSales: result.data.totalSales || result.data.summary?.totalSales || 0,
+                                debtPercent: result.data.debtPercent || 0
+                            };
+                        } else {
+                            importForm.previewData = {
+                                customerName: file.name.replace('.json', ''),
+                                totalSales: 0,
+                                debtPercent: 0
+                            };
+                        }
+                    } catch (e) {
+                        importForm.previewData = {
+                            customerName: file.name.replace('.json', ''),
+                            totalSales: 0,
+                            debtPercent: 0
+                        };
+                    }
                 };
 
                 const confirmImport = async () => {
                     if (!importForm.selectedFile) return;
                     const projNo = importForm.selectedFile.name.replace('.json', '');
-                    const sourceData = demoData.find(d => d.projNo === projNo) || demoData[0];
-                    const newData = { ...JSON.parse(JSON.stringify(sourceData)), projNo, customerName: importForm.previewData.customerName || projNo };
-                    const exists = listData.value.findIndex(item => item.projNo === projNo);
-                    if (exists >= 0 && !importForm.overwrite) {
-                        alert('该报价已存在，请选择覆盖或取消');
-                        return;
+                    try {
+                        const result = await gasCall('read_quote_file', { fileId: importForm.selectedFile.id });
+                        if (result.success && result.data) {
+                            // Normalize data structure
+                            const raw = result.data;
+                            const newData = {
+                                projNo,
+                                customerName: raw.customer?.name || raw.customerName || projNo,
+                                totalSales: raw.totalSales || raw.summary?.totalSales || 0,
+                                totalCost: raw.totalCost || 0,
+                                profit: raw.profit || 0,
+                                profitPercent: raw.profitPercent || 0,
+                                debtPercent: raw.debtPercent || 0,
+                                status: raw.status || 'pending',
+                                lastModified: raw.lastModified || new Date().toISOString().split('T')[0],
+                                customer: raw.customer || {},
+                                salesPerson: raw.salesPerson || {},
+                                items: raw.items || [],
+                                summary: raw.summary || { totalSales: raw.totalSales || 0 },
+                                actualCost: raw.actualCost || { entries: [] },
+                                designFee: raw.designFee || { entries: [] },
+                                installFee: raw.installFee || { entries: [] },
+                                logisticsFee: raw.logisticsFee || { entries: [] },
+                                commission: raw.commission || { sales: { percent: 0, amount: 0 }, subSales: { percent: 0, amount: 0 }, measurer: { percent: 0, amount: 0 }, designer: { percent: 0, amount: 0 }, manager: { percent: 0, amount: 0 } },
+                                loss: raw.loss || { entries: [] },
+                                _rawData: raw
+                            };
+                            const exists = listData.value.findIndex(item => item.projNo === projNo);
+                            if (exists >= 0 && !importForm.overwrite) {
+                                alert('该报价已存在，请选择覆盖或取消');
+                                return;
+                            }
+                            if (exists >= 0) {
+                                listData.value[exists] = newData;
+                            } else {
+                                listData.value.push(newData);
+                            }
+                            await saveToLocal(listData.value);
+                            await saveQuoteToLocal(newData);
+                            importDialogVisible.value = false;
+                            alert('导入成功！');
+                        } else {
+                            alert('导入失败：无法读取文件数据');
+                        }
+                    } catch (e) {
+                        alert('导入失败：' + e.message);
                     }
-                    if (exists >= 0) {
-                        listData.value[exists] = newData;
-                    } else {
-                        listData.value.push(newData);
-                    }
-                    await saveToLocal(listData.value);
-                    await saveQuoteToLocal(newData);
-                    importDialogVisible.value = false;
-                    alert('导入成功！');
                 };
 
                 const showExportDialog = (type) => {
