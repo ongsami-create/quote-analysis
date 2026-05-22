@@ -973,38 +973,60 @@ function getRoleKey(role) {
 // =====================================================
 
 /**
- * 列出 test/ 文件夹中的所有报价文件 (用于导入)
- * action: list_quote_files
+ * 列出 Squirrel Designer/ 下所有用户文件夹
+ * action: list_user_folders
  */
-function listQuoteFiles() {
+function listUserFolders() {
   try {
-    // 查找根目录下的 test/ 文件夹
-    const rootFolders = DriveApp.getRootFolder().getFoldersByName('test');
-    if (!rootFolders.hasNext()) {
-      return { success: false, message: 'test folder not found in root directory' };
+    initializeFolders();
+    const folders = [];
+    const subs = mainFolder.getFolders();
+    while (subs.hasNext()) {
+      const folder = subs.next();
+      const name = folder.getName();
+      if (name !== 'admin' && name !== 'squirrel analysis' && name !== 'Commission') {
+        folders.push({ name, id: folder.getId() });
+      }
     }
-    
-    const testFolder = rootFolders.next();
-    const files = testFolder.getFiles();
+    folders.sort((a, b) => a.name.localeCompare(b.name));
+    return { success: true, folders };
+  } catch (error) {
+    return { success: false, message: error.toString() };
+  }
+}
+
+/**
+ * 列出指定用户文件夹中的报价文件
+ * action: list_user_quote_files
+ * @param username - 用户文件夹名
+ */
+function listUserQuoteFiles(username) {
+  try {
+    initializeFolders();
+    const userFolder = getUserFolder(username);
+    const files = userFolder.getFiles();
     const fileList = [];
-    
+
     while (files.hasNext()) {
       const file = files.next();
       const name = file.getName();
-      // 只返回 JSON 文件
-      if (name.endsWith('.json')) {
-        fileList.push({
-          id: file.getId(),
-          name: name,
-          modifiedTime: file.getLastUpdated().toISOString(),
-          size: file.getSize()
-        });
+      if (name.endsWith('.json') && !name.startsWith('final_') && !name.startsWith('shared_')) {
+        try {
+          const data = JSON.parse(file.getBlob().getDataAsString());
+          fileList.push({
+            id: file.getId(),
+            name: name,
+            projNo: data.projNo || name.replace('.json', ''),
+            customerName: data.customerName || '',
+            totalSales: data.total || data.grandTotal || data.totalSales || 0,
+            modifiedTime: file.getLastUpdated().toISOString()
+          });
+        } catch (e) {
+          fileList.push({ id: file.getId(), name: name, projNo: name.replace('.json', ''), customerName: '', totalSales: 0, modifiedTime: file.getLastUpdated().toISOString() });
+        }
       }
     }
-    
-    // 按修改时间倒序排列
     fileList.sort((a, b) => new Date(b.modifiedTime) - new Date(a.modifiedTime));
-    
     return { success: true, files: fileList };
   } catch (error) {
     return { success: false, message: error.toString() };
@@ -1012,57 +1034,36 @@ function listQuoteFiles() {
 }
 
 /**
- * 读取指定报价文件的内容 (用于导入预览)
- * action: read_quote_file
- * @param fileId - 文件ID
+ * 读取指定用户的报价文件
+ * action: read_user_quote_file
+ * @param username
+ * @param fileId
  */
-function readQuoteFile(fileId) {
+function readUserQuoteFile(username, fileId) {
   try {
     const file = DriveApp.getFileById(fileId);
     const content = file.getBlob().getDataAsString();
     const data = JSON.parse(content);
-    
-    return { 
-      success: true, 
-      fileId: fileId,
-      fileName: file.getName(),
-      data: data 
-    };
+    return { success: true, fileId, fileName: file.getName(), data };
   } catch (error) {
     return { success: false, message: error.toString() };
   }
 }
 
 /**
- * 读取指定报价文件的内容 (通过文件名)
- * action: read_quote_file_by_name
- * @param fileName - 文件名 (如 test00.json)
+ * 读取指定用户的报价文件（通过文件名）
+ * action: read_user_quote_file_by_name
+ * @param username
+ * @param fileName
  */
-function readQuoteFileByName(fileName) {
+function readUserQuoteFileByName(username, fileName) {
   try {
-    // 查找根目录下的 test/ 文件夹
-    const rootFolders = DriveApp.getRootFolder().getFoldersByName('test');
-    if (!rootFolders.hasNext()) {
-      return { success: false, message: 'test folder not found' };
-    }
-    
-    const testFolder = rootFolders.next();
-    const files = testFolder.getFilesByName(fileName);
-    
-    if (!files.hasNext()) {
-      return { success: false, message: 'File not found: ' + fileName };
-    }
-    
+    initializeFolders();
+    const userFolder = getUserFolder(username);
+    const files = userFolder.getFilesByName(fileName);
+    if (!files.hasNext()) return { success: false, message: 'File not found' };
     const file = files.next();
-    const content = file.getBlob().getDataAsString();
-    const data = JSON.parse(content);
-    
-    return { 
-      success: true, 
-      fileId: file.getId(),
-      fileName: fileName,
-      data: data 
-    };
+    return { success: true, fileId: file.getId(), fileName, data: JSON.parse(file.getBlob().getDataAsString()) };
   } catch (error) {
     return { success: false, message: error.toString() };
   }
@@ -1311,14 +1312,17 @@ function doGet(e) {
         result = getAllCommissions(e.parameter.projNo);
         break;
       // ===== Quote Analysis API (新增) =====
-      case 'list_quote_files':
-        result = listQuoteFiles();
+      case 'list_user_folders':
+        result = listUserFolders();
         break;
-      case 'read_quote_file':
-        result = readQuoteFile(e.parameter.fileId);
+      case 'list_user_quote_files':
+        result = listUserQuoteFiles(e.parameter.username);
         break;
-      case 'read_quote_file_by_name':
-        result = readQuoteFileByName(e.parameter.fileName);
+      case 'read_user_quote_file':
+        result = readUserQuoteFile(e.parameter.username, e.parameter.fileId);
+        break;
+      case 'read_user_quote_file_by_name':
+        result = readUserQuoteFileByName(e.parameter.username, e.parameter.fileName);
         break;
       case 'save_check_quote':
         result = saveCheckQuote(e.parameter.projNo, JSON.parse(e.parameter.quoteData || '{}'));

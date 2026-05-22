@@ -792,20 +792,30 @@
                     <button class="modal-close" @click="importDialogVisible = false">×</button>
                 </div>
                 <div class="modal-body">
+                    <div class="form-group" style="margin-bottom: 16px;">
+                        <label class="form-label">选择用户文件夹</label>
+                        <select class="filter-select" v-model="importForm.selectedFolder" style="width: 100%;" @change="onFolderChange">
+                            <option value="">-- 请选择用户 --</option>
+                            <option v-for="folder in availableFolders" :key="folder.name" :value="folder.name">{{ folder.name }}</option>
+                        </select>
+                    </div>
+
                     <div class="form-group" style="margin-bottom: 20px;">
                         <label class="form-label">选择报价文件</label>
-                        <div class="file-list">
+                        <div class="file-list" v-if="importForm.selectedFolder">
+                            <div v-if="availableFiles.length === 0" style="padding: 20px; text-align: center; color: #999;">该文件夹暂无报价文件</div>
                             <div v-for="file in availableFiles" :key="file.id"
                                 class="file-item"
                                 :class="{ selected: importForm.fileId === file.id }"
                                 @click="selectImportFile(file)">
                                 <div>
                                     <div class="file-name">{{ file.name }}</div>
-                                    <div class="file-meta">修改: {{ file.modifiedTime }}</div>
+                                    <div class="file-meta">{{ file.customerName || '-' }} · RM {{ formatNumber(file.totalSales) }} · {{ file.modifiedTime }}</div>
                                 </div>
                                 <span v-if="importForm.fileId === file.id" style="color: var(--secondary);">✓</span>
                             </div>
                         </div>
+                        <div v-else style="padding: 20px; text-align: center; color: #999;">请先选择用户文件夹</div>
                     </div>
 
                     <div v-if="importForm.selectedFile" class="import-preview">
@@ -1360,8 +1370,9 @@
 
                 // Import Dialog
                 const importDialogVisible = ref(false);
-                const importForm = reactive({ fileId: '', selectedFile: null, overwrite: false, previewData: {} });
+                const importForm = reactive({ fileId: '', selectedFile: null, overwrite: false, previewData: {}, selectedFolder: '' });
                 const availableFiles = ref([]);
+                const availableFolders = ref([]);
 
                 // Edit Dialog
                 const editDialogVisible = ref(false);
@@ -1485,10 +1496,32 @@
                     importForm.selectedFile = null;
                     importForm.overwrite = false;
                     importForm.previewData = {};
-                    loadingText.value = '正在加载云端文件...';
+                    importForm.selectedFolder = '';
+                    availableFiles.value = [];
+                    loadingText.value = '正在加载用户列表...';
                     isLoading.value = true;
                     try {
-                        const result = await gasCall('list_quote_files');
+                        const result = await gasCall('list_user_folders');
+                        if (result.success && result.folders) {
+                            availableFolders.value = result.folders;
+                        } else {
+                            availableFolders.value = [];
+                        }
+                    } catch (e) {
+                        availableFolders.value = [];
+                    } finally {
+                        isLoading.value = false;
+                    }
+                };
+
+                const onFolderChange = async () => {
+                    if (!importForm.selectedFolder) { availableFiles.value = []; return; }
+                    importForm.fileId = '';
+                    importForm.selectedFile = null;
+                    importForm.previewData = {};
+                    isLoading.value = true;
+                    try {
+                        const result = await gasCall('list_user_quote_files', { username: importForm.selectedFolder });
                         if (result.success && result.files) {
                             availableFiles.value = result.files;
                         } else {
@@ -1505,26 +1538,19 @@
                     importForm.fileId = file.id;
                     importForm.selectedFile = file;
                     try {
-                        const result = await gasCall('read_quote_file', { fileId: file.id });
+                        const result = await gasCall('read_user_quote_file', { username: importForm.selectedFolder, fileId: file.id });
                         if (result.success && result.data) {
+                            const raw = result.data;
                             importForm.previewData = {
-                                customerName: result.data.customer?.name || result.data.customerName || file.name.replace('.json', ''),
-                                totalSales: result.data.totalSales || result.data.summary?.totalSales || 0,
-                                debtPercent: result.data.debtPercent || 0
+                                customerName: raw.customerName || raw.customer?.name || file.name.replace('.json', ''),
+                                totalSales: raw.total || raw.grandTotal || raw.totalSales || 0,
+                                debtPercent: raw.debtPercent || 0
                             };
                         } else {
-                            importForm.previewData = {
-                                customerName: file.name.replace('.json', ''),
-                                totalSales: 0,
-                                debtPercent: 0
-                            };
+                            importForm.previewData = { customerName: file.name.replace('.json', ''), totalSales: 0, debtPercent: 0 };
                         }
                     } catch (e) {
-                        importForm.previewData = {
-                            customerName: file.name.replace('.json', ''),
-                            totalSales: 0,
-                            debtPercent: 0
-                        };
+                        importForm.previewData = { customerName: file.name.replace('.json', ''), totalSales: 0, debtPercent: 0 };
                     }
                 };
 
@@ -1532,14 +1558,13 @@
                     if (!importForm.selectedFile) return;
                     const projNo = importForm.selectedFile.name.replace('.json', '');
                     try {
-                        const result = await gasCall('read_quote_file', { fileId: importForm.selectedFile.id });
+                        const result = await gasCall('read_user_quote_file', { username: importForm.selectedFolder, fileId: importForm.selectedFile.id });
                         if (result.success && result.data) {
-                            // Normalize data structure
                             const raw = result.data;
                             const newData = {
                                 projNo,
-                                customerName: raw.customer?.name || raw.customerName || projNo,
-                                totalSales: raw.totalSales || raw.summary?.totalSales || 0,
+                                customerName: raw.customerName || raw.customer?.name || projNo,
+                                totalSales: raw.total || raw.grandTotal || raw.totalSales || 0,
                                 totalCost: raw.totalCost || 0,
                                 profit: raw.profit || 0,
                                 profitPercent: raw.profitPercent || 0,
@@ -1547,14 +1572,14 @@
                                 status: raw.status || 'pending',
                                 lastModified: raw.lastModified || new Date().toISOString().split('T')[0],
                                 customer: raw.customer || {},
-                                salesPerson: raw.salesPerson || {},
+                                salesPerson: raw.salesPerson || { projNo: raw.projNo || projNo, name: raw.salesperson || '', phone: raw.salespersonContact || '', subSales: raw.subSalesperson || '', measurer: raw.measurementEngineer || '', designer: raw.designerName || '' },
                                 items: raw.items || [],
-                                summary: raw.summary || { totalSales: raw.totalSales || 0 },
+                                summary: raw.summary || { totalSales: raw.total || raw.grandTotal || raw.totalSales || 0 },
                                 actualCost: raw.actualCost || { entries: [] },
                                 designFee: raw.designFee || { entries: [] },
                                 installFee: raw.installFee || { entries: [] },
                                 logisticsFee: raw.logisticsFee || { entries: [] },
-                                commission: raw.commission || { sales: { percent: 0, amount: 0 }, subSales: { percent: 0, amount: 0 }, measurer: { percent: 0, amount: 0 }, designer: { percent: 0, amount: 0 }, manager: { percent: 0, amount: 0 } },
+                                commission: raw.commission || { sales: { percent: raw.salespersonCommissionPercent || 0, amount: raw.salespersonCommission || 0 }, subSales: { percent: raw.subSalespersonCommissionPercent || 0, amount: raw.subSalespersonCommission || 0 }, measurer: { percent: raw.measurementEngineerCommissionPercent || 0, amount: raw.measurementEngineerCommission || 0 }, designer: { percent: raw.designerCommissionPercent || 0, amount: raw.designerCommission || 0 }, manager: { percent: 0, amount: 0 } },
                                 loss: raw.loss || { entries: [] },
                                 _rawData: raw
                             };
