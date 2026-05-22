@@ -794,10 +794,12 @@
                 <div class="modal-body">
                     <div class="form-group" style="margin-bottom: 16px;">
                         <label class="form-label">选择用户文件夹</label>
-                        <select class="filter-select" v-model="importForm.selectedFolder" style="width: 100%;" @change="onFolderChange">
+                        <select class="filter-select" v-model="importForm.selectedFolder" style="width: 100%;" @change="onFolderChange" :disabled="isLoading">
                             <option value="">-- 请选择用户 --</option>
                             <option v-for="folder in availableFolders" :key="folder.name" :value="folder.name">{{ folder.name }}</option>
                         </select>
+                        <div v-if="isLoading" style="font-size: 12px; color: #999; margin-top: 4px;">加载中...</div>
+                        <div v-else-if="availableFolders.length === 0 && importForm.selectedFolder === ''" style="font-size: 12px; color: #e74c3c; margin-top: 4px;">⚠️ 无法加载用户列表，请检查网络或刷新页面重试</div>
                     </div>
 
                     <div class="form-group" style="margin-bottom: 20px;">
@@ -1432,9 +1434,14 @@
                     for (const [k, v] of Object.entries(params)) {
                         if (v !== undefined && v !== null) url.searchParams.set(k, v);
                     }
-                    const resp = await fetch(url.toString(), { method: 'GET', mode: 'cors' });
-                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-                    return resp.json();
+                    try {
+                        const resp = await fetch(url.toString(), { method: 'GET', mode: 'cors', cache: 'no-cache' });
+                        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                        return resp.json();
+                    } catch (e) {
+                        console.warn('GAS call failed:', action, e);
+                        return { success: false, message: e.message };
+                    }
                 }
 
                 const syncFromCloud = async () => {
@@ -1500,15 +1507,21 @@
                     availableFiles.value = [];
                     loadingText.value = '正在加载用户列表...';
                     isLoading.value = true;
+                    availableFolders.value = [];
                     try {
-                        const result = await gasCall('list_user_folders');
+                        const url = new URL(GAS_URL);
+                        url.searchParams.set('action', 'list_user_folders');
+                        const resp = await fetch(url.toString(), { method: 'GET', mode: 'cors' });
+                        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                        const result = await resp.json();
                         if (result.success && result.folders) {
                             availableFolders.value = result.folders;
+                            console.log('[Import] Loaded folders:', result.folders.length);
                         } else {
-                            availableFolders.value = [];
+                            console.warn('[Import] list_user_folders failed:', result.message);
                         }
                     } catch (e) {
-                        availableFolders.value = [];
+                        console.error('[Import] list_user_folders error:', e);
                     } finally {
                         isLoading.value = false;
                     }
