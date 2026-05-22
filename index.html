@@ -1412,34 +1412,68 @@
 
                 const filterData = () => {};
 
+                // GAS API Config
+                const GAS_URL = 'https://script.google.com/macros/s/AKfycbxQ4GXLe-ZjNK3-XBxImbVp6r1iCRP3kOB3jbsaF14vejP5MYhRRnvjPSUSz6nYDsDu/exec';
+
+                async function gasCall(action, params = {}) {
+                    const url = new URL(GAS_URL);
+                    url.searchParams.set('action', action);
+                    for (const [k, v] of Object.entries(params)) {
+                        if (v !== undefined && v !== null) url.searchParams.set(k, v);
+                    }
+                    const resp = await fetch(url.toString(), { method: 'GET', mode: 'cors' });
+                    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                    return resp.json();
+                }
+
                 const syncFromCloud = async () => {
                     isLoading.value = true;
-                    loadingText.value = '正在同步...';
+                    loadingText.value = '正在同步云端...';
                     try {
                         if (navigator.onLine) {
-                            // Try to load from local first
-                            const localData = await loadFromLocal();
-                            if (localData.length > 0) {
-                                listData.value = localData;
-                                isConnected.value = true;
+                            // Test connection first
+                            let cloudOk = false;
+                            try {
+                                const ping = await gasCall('ping');
+                                cloudOk = ping.success;
+                            } catch (e) {
+                                cloudOk = false;
+                            }
+
+                            if (cloudOk) {
+                                // Fetch from GAS
+                                const result = await gasCall('get_check_quote_list');
+                                if (result.success && result.quotes && result.quotes.length > 0) {
+                                    listData.value = result.quotes;
+                                    await saveToLocal(result.quotes);
+                                    isConnected.value = true;
+                                } else {
+                                    // Empty cloud — use local or demo
+                                    const localData = await loadFromLocal();
+                                    listData.value = localData.length > 0 ? localData : [...demoData];
+                                    if (!localData.length) await saveToLocal(demoData);
+                                    isConnected.value = true;
+                                }
                             } else {
-                                listData.value = [...demoData];
-                                await saveToLocal(demoData);
-                                isConnected.value = true;
+                                const localData = await loadFromLocal();
+                                listData.value = localData.length > 0 ? localData : [...demoData];
+                                if (!localData.length) await saveToLocal(demoData);
+                                isConnected.value = false;
                             }
                         } else {
+                            // Offline: local only
                             const localData = await loadFromLocal();
-                            if (localData.length > 0) {
-                                listData.value = localData;
-                            } else {
-                                listData.value = [...demoData];
-                                await saveToLocal(demoData);
-                            }
+                            listData.value = localData.length > 0 ? localData : [...demoData];
+                            if (!localData.length) await saveToLocal(demoData);
                             isConnected.value = false;
                         }
                         syncQueueCount.value = await getSyncQueueCount();
                     } catch (error) {
-                        listData.value = [...demoData];
+                        // Fallback: local or demo
+                        const localData = await loadFromLocal();
+                        listData.value = localData.length > 0 ? localData : [...demoData];
+                        if (!localData.length) await saveToLocal(demoData);
+                        isConnected.value = false;
                     } finally {
                         isLoading.value = false;
                     }
@@ -1533,7 +1567,16 @@
                         syncQueueCount.value = await getSyncQueueCount();
                         alert('已保存到本地，网络恢复后将自动同步');
                     } else {
-                        alert('保存成功！');
+                        // Try to save to GAS
+                        try {
+                            await gasCall('save_check_quote', {
+                                projNo: editData.value.projNo,
+                                quoteData: JSON.stringify(editData.value)
+                            });
+                            alert('保存成功！已同步到云端');
+                        } catch (e) {
+                            alert('已保存到本地，云端同步失败（' + e.message + '）');
+                        }
                     }
                     editDialogVisible.value = false;
                 };
