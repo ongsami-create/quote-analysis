@@ -1,0 +1,1574 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quote Analysis - 报价分析系统</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        :root {
+            --primary: #2c3e50;
+            --secondary: #3498db;
+            --accent: #e74c3c;
+            --bg: #f5f6fa;
+            --card: #ffffff;
+            --text: #2c3e50;
+            --border: #e0e0e0;
+            --success: #27ae60;
+            --warning: #f39c12;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.6;
+            min-height: 100vh;
+        }
+
+        /* Header */
+        .header {
+            background: var(--primary);
+            color: white;
+            padding: 16px 20px;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .logo {
+            width: 40px;
+            height: 40px;
+            background: white;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            color: var(--primary);
+            font-size: 14px;
+        }
+
+        .title { font-size: 18px; font-weight: 600; }
+
+        .header-right {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .connection-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 12px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            background: rgba(255,255,255,0.15);
+        }
+
+        .connection-status.online { background: rgba(39, 174, 96, 0.3); }
+        .connection-status.offline { background: rgba(231, 76, 60, 0.3); }
+
+        /* Main Container */
+        .main-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        /* Action Bar */
+        .action-bar {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .btn-primary { background: var(--secondary); color: white; }
+        .btn-primary:hover { background: #2980b9; }
+        .btn-secondary { background: #e0e0e0; color: var(--text); }
+        .btn-secondary:hover { background: #d0d0d0; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-danger { background: var(--accent); color: white; }
+
+        /* Filter Bar */
+        .filter-bar {
+            background: var(--card);
+            border-radius: 12px;
+            padding: 16px 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+            display: flex;
+            gap: 16px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        .search-input {
+            flex: 1;
+            min-width: 200px;
+            padding: 10px 16px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 14px;
+        }
+
+        .search-input:focus { outline: none; border-color: var(--secondary); }
+
+        .filter-select {
+            padding: 10px 16px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            font-size: 14px;
+            background: white;
+            cursor: pointer;
+        }
+
+        /* Data Table */
+        .data-table {
+            background: var(--card);
+            border-radius: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+            overflow: hidden;
+        }
+
+        .table-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .table-title { font-size: 16px; font-weight: 600; }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        th, td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            font-size: 13px;
+            color: #666;
+        }
+
+        tr:hover { background: #f8f9fa; }
+
+        .text-right { text-align: right; }
+        .text-center { text-align: center; }
+
+        /* Status Badge */
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .status-pending { background: #e8f4f8; color: #3498db; }
+        .status-completed { background: #e8f8ec; color: #27ae60; }
+        .status-warning { background: #fef3e2; color: #f39c12; }
+
+        .warning-badge {
+            background: var(--warning);
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+
+        /* Summary Bar */
+        .summary-bar {
+            background: #f8f9fa;
+            padding: 12px 20px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 24px;
+            flex-wrap: wrap;
+            font-size: 13px;
+            color: #666;
+        }
+
+        .summary-item { display: flex; gap: 8px; }
+        .summary-label { color: #999; }
+        .summary-value { font-weight: 600; color: var(--text); }
+
+        /* Link */
+        .link {
+            color: var(--secondary);
+            text-decoration: none;
+            cursor: pointer;
+        }
+        .link:hover { text-decoration: underline; }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            padding-top: 50px;
+            z-index: 1000;
+            overflow-y: auto;
+        }
+
+        .modal {
+            background: white;
+            border-radius: 12px;
+            width: 95%;
+            max-width: 1000px;
+            max-height: 90vh;
+            overflow-y: auto;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        }
+
+        .modal-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            background: white;
+            z-index: 10;
+        }
+
+        .modal-title { font-size: 18px; font-weight: 600; }
+
+        .modal-close {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            color: #999;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+        }
+
+        .modal-close:hover { color: var(--text); }
+
+        .modal-body { padding: 20px; }
+
+        .modal-footer {
+            padding: 16px 20px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: flex-end;
+            gap: 12px;
+            position: sticky;
+            bottom: 0;
+            background: #f8f9fa;
+        }
+
+        /* Section */
+        .section {
+            border-bottom: 1px solid var(--border);
+        }
+
+        .section-header {
+            padding: 12px 20px;
+            background: #f8f9fa;
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+        }
+
+        .section-header:hover { background: #f0f0f0; }
+
+        .section-content {
+            padding: 16px 20px;
+        }
+
+        .section.collapsed .section-content { display: none; }
+
+        /* Form */
+        .form-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .form-label {
+            font-size: 12px;
+            color: #999;
+        }
+
+        .form-input {
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 14px;
+        }
+
+        .form-input:focus { outline: none; border-color: var(--secondary); }
+
+        /* Cost Entry Table */
+        .entry-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 12px;
+        }
+
+        .entry-table th,
+        .entry-table td {
+            padding: 10px 8px;
+            border: 1px solid var(--border);
+            text-align: left;
+            font-size: 13px;
+        }
+
+        .entry-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+        }
+
+        .entry-table input {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 13px;
+        }
+
+        .entry-table input:focus { outline: none; border-color: var(--secondary); }
+
+        .summary-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 12px 0;
+            border-top: 2px solid var(--border);
+            margin-top: 12px;
+            font-weight: 600;
+        }
+
+        .add-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 16px;
+            background: #f8f9fa;
+            border: 1px dashed var(--border);
+            border-radius: 8px;
+            color: #666;
+            cursor: pointer;
+            font-size: 13px;
+            transition: all 0.3s;
+        }
+
+        .add-btn:hover {
+            border-color: var(--secondary);
+            color: var(--secondary);
+        }
+
+        /* Commission Grid */
+        .commission-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 16px;
+        }
+
+        .commission-item {
+            background: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+        }
+
+        .commission-item label {
+            display: block;
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 6px;
+        }
+
+        .commission-inputs {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .commission-inputs input {
+            width: 70px;
+            padding: 8px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .commission-amount {
+            padding: 8px 12px;
+            background: var(--secondary);
+            color: white;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 13px;
+            min-width: 90px;
+            text-align: center;
+        }
+
+        /* Net Profit Card */
+        .net-profit-card {
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            color: white;
+            padding: 20px;
+            border-radius: 12px;
+        }
+
+        .net-profit-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin-bottom: 16px;
+        }
+
+        .net-profit-item {
+            text-align: center;
+        }
+
+        .net-profit-value {
+            font-size: 24px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .net-profit-label {
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        .net-profit-total {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(255,255,255,0.2);
+            font-size: 14px;
+        }
+
+        /* Import Dialog */
+        .file-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .file-item:hover {
+            border-color: var(--secondary);
+            background: #f8f9fa;
+        }
+
+        .file-item.selected {
+            border-color: var(--secondary);
+            background: #e8f4f8;
+        }
+
+        .file-name { font-weight: 600; margin-bottom: 4px; }
+        .file-meta { font-size: 12px; color: #999; }
+
+        /* Import Preview */
+        .import-preview {
+            background: #f8f9fa;
+            padding: 16px;
+            border-radius: 8px;
+            margin-top: 16px;
+        }
+
+        .import-preview-title { font-weight: 600; margin-bottom: 12px; }
+
+        .import-preview-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+
+        .import-preview-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .import-preview-label { font-size: 11px; color: #999; }
+        .import-preview-value { font-size: 14px; font-weight: 500; }
+
+        .import-warning {
+            background: #fef3e2;
+            padding: 12px;
+            border-radius: 8px;
+            margin-top: 16px;
+            font-size: 13px;
+            color: #d35400;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Loading */
+        .loading-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .loading-content {
+            background: white;
+            padding: 24px 40px;
+            border-radius: 12px;
+            text-align: center;
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid var(--secondary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+        }
+
+        .empty-state-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+        }
+
+        /* Checkbox */
+        .checkbox-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .checkbox-wrapper input { width: 16px; height: 16px; }
+
+        /* Warning Row */
+        .warning-row { background-color: #fef3e2 !important; }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .action-bar, .filter-bar { flex-direction: column; }
+            .net-profit-grid { grid-template-columns: repeat(2, 1fr); }
+            table { font-size: 12px; }
+            th, td { padding: 8px; }
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <div class="logo">QA</div>
+                <span class="title">Quote Analysis 报价分析</span>
+                <span v-if="syncQueueCount > 0" style="background: var(--warning); color: white; padding: 4px 10px; border-radius: 10px; font-size: 12px;">
+                    待同步: {{ syncQueueCount }}
+                </span>
+            </div>
+            <div class="header-right">
+                <div class="connection-status" :class="{ online: isConnected && isOnline, offline: !isOnline }">
+                    <span v-if="!isOnline">⚠️</span>
+                    <span v-else-if="isConnected">✓</span>
+                    <span v-else>✗</span>
+                    <span v-if="!isOnline">离线模式</span>
+                    <span v-else-if="isConnected">已连接</span>
+                    <span v-else>未连接</span>
+                </div>
+                <button class="btn btn-secondary" @click="logout">登出</button>
+            </div>
+        </header>
+
+        <!-- Loading -->
+        <div v-if="isLoading" class="loading-overlay">
+            <div class="loading-content">
+                <div class="spinner"></div>
+                <div>{{ loadingText }}</div>
+            </div>
+        </div>
+
+        <!-- Main Container -->
+        <main class="main-container">
+            <!-- Action Bar -->
+            <div class="action-bar">
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn btn-primary" @click="showImportDialog">
+                        ➕ 导入报价
+                    </button>
+                    <button class="btn btn-secondary" @click="showExportDialog('pdf')">
+                        📄 导出 PDF
+                    </button>
+                    <button class="btn btn-secondary" @click="showExportDialog('excel')">
+                        📊 导出 Excel
+                    </button>
+                </div>
+                <button class="btn btn-secondary" @click="syncFromCloud">
+                    🔄 同步云端
+                </button>
+            </div>
+
+            <!-- Filter Bar -->
+            <div class="filter-bar">
+                <input
+                    v-model="searchQuery"
+                    class="search-input"
+                    placeholder="搜索 ProjNo / 客户名..."
+                    @input="filterData"
+                />
+                <select v-model="filterStatus" class="filter-select" @change="filterData">
+                    <option value="">全部状态</option>
+                    <option value="pending">进行中</option>
+                    <option value="completed">已完成</option>
+                    <option value="warning">预警</option>
+                </select>
+            </div>
+
+            <!-- Data Table -->
+            <div class="data-table">
+                <div class="table-header">
+                    <span class="table-title">报价列表 ({{ filteredList.length }} 项)</span>
+                </div>
+
+                <table>
+                    <thead>
+                        <tr>
+                            <th>ProjNo</th>
+                            <th>客户</th>
+                            <th class="text-right">总销售</th>
+                            <th class="text-right">总成本</th>
+                            <th class="text-right">总利润</th>
+                            <th class="text-right">利润%</th>
+                            <th class="text-right">欠账%</th>
+                            <th>状态</th>
+                            <th>操作</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="item in filteredList" :key="item.projNo" :class="{ 'warning-row': item.profitPercent < 25 }">
+                            <td><span class="link" @click="openEdit(item)">{{ item.projNo }}</span></td>
+                            <td>{{ item.customerName }}</td>
+                            <td class="text-right">RM {{ formatNumber(item.totalSales) }}</td>
+                            <td class="text-right">RM {{ formatNumber(item.totalCost) }}</td>
+                            <td class="text-right">RM {{ formatNumber(item.profit) }}</td>
+                            <td class="text-right">
+                                <span :class="{ 'warning-badge': item.profitPercent < 25 }">
+                                    {{ item.profitPercent.toFixed(1) }}%
+                                </span>
+                            </td>
+                            <td class="text-right">{{ item.debtPercent ? item.debtPercent.toFixed(1) + '%' : '-' }}</td>
+                            <td>
+                                <span :class="['status-badge', 'status-' + item.status]">
+                                    {{ statusText[item.status] }}
+                                </span>
+                            </td>
+                            <td>
+                                <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px;" @click="openEdit(item)">编辑</button>
+                                <button class="btn btn-success" style="padding: 4px 8px; font-size: 12px;" @click="markComplete(item)">
+                                    {{ item.status === 'completed' ? '取消' : '完成' }}
+                                </button>
+                                <button class="btn btn-danger" style="padding: 4px 8px; font-size: 12px;" @click="deleteProject(item)">删除</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- Summary Bar -->
+                <div class="summary-bar">
+                    <div class="summary-item">
+                        <span class="summary-label">合计:</span>
+                        <span class="summary-value">{{ filteredList.length }} 项</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">总销售:</span>
+                        <span class="summary-value">RM {{ formatNumber(summary.totalSales) }}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">总成本:</span>
+                        <span class="summary-value">RM {{ formatNumber(summary.totalCost) }}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">总利润:</span>
+                        <span class="summary-value">RM {{ formatNumber(summary.profit) }}</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">平均利润%:</span>
+                        <span class="summary-value">{{ summary.avgProfitPercent.toFixed(1) }}%</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Import Dialog -->
+        <div v-if="importDialogVisible" class="modal-overlay" @click.self="importDialogVisible = false">
+            <div class="modal">
+                <div class="modal-header">
+                    <span class="modal-title">导入报价</span>
+                    <button class="modal-close" @click="importDialogVisible = false">×</button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group" style="margin-bottom: 20px;">
+                        <label class="form-label">选择报价文件</label>
+                        <div class="file-list">
+                            <div v-for="file in availableFiles" :key="file.id"
+                                class="file-item"
+                                :class="{ selected: importForm.fileId === file.id }"
+                                @click="selectImportFile(file)">
+                                <div>
+                                    <div class="file-name">{{ file.name }}</div>
+                                    <div class="file-meta">修改: {{ file.modifiedTime }}</div>
+                                </div>
+                                <span v-if="importForm.fileId === file.id" style="color: var(--secondary);">✓</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div v-if="importForm.selectedFile" class="import-preview">
+                        <div class="import-preview-title">📄 预览选中的报价文件</div>
+                        <div class="import-preview-grid">
+                            <div class="import-preview-item">
+                                <span class="import-preview-label">ProjNo</span>
+                                <span class="import-preview-value">{{ importForm.selectedFile.name.replace('.json', '') }}</span>
+                            </div>
+                            <div class="import-preview-item">
+                                <span class="import-preview-label">客户</span>
+                                <span class="import-preview-value">{{ importForm.previewData.customerName || '-' }}</span>
+                            </div>
+                            <div class="import-preview-item">
+                                <span class="import-preview-label">总销售</span>
+                                <span class="import-preview-value">RM {{ formatNumber(importForm.previewData.totalSales || 0) }}</span>
+                            </div>
+                            <div class="import-preview-item">
+                                <span class="import-preview-label">欠账%</span>
+                                <span class="import-preview-value" :class="{ 'warning-badge': importForm.previewData.debtPercent > 30 }">
+                                    {{ (importForm.previewData.debtPercent || 0).toFixed(1) }}%
+                                </span>
+                            </div>
+                        </div>
+
+                        <div v-if="isAlreadyImported" class="import-warning">
+                            ⚠️ 该报价可能已导入过
+                            <label class="checkbox-wrapper">
+                                <input type="checkbox" v-model="importForm.overwrite" />
+                                <span>覆盖现有数据</span>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @click="importDialogVisible = false">取消</button>
+                    <button class="btn btn-primary" @click="confirmImport" :disabled="!importForm.fileId">确认导入</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Edit Dialog -->
+        <div v-if="editDialogVisible" class="modal-overlay">
+            <div class="modal">
+                <div class="modal-header">
+                    <span class="modal-title">编辑报价: {{ editData?.projNo }}</span>
+                    <button class="modal-close" @click="editDialogVisible = false">×</button>
+                </div>
+                <div class="modal-body" v-if="editData">
+                    
+                    <!-- Section 1: Customer Info -->
+                    <div class="section" :class="{ collapsed: sections.customer }">
+                        <div class="section-header" @click="sections.customer = !sections.customer">
+                            <span>🔷 第1行: 客户信息</span>
+                            <span>{{ sections.customer ? '▼' : '▲' }}</span>
+                        </div>
+                        <div class="section-content">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label">日期</label>
+                                    <input type="date" class="form-input" v-model="editData.customer.date" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">客户名字</label>
+                                    <input type="text" class="form-input" v-model="editData.customer.name" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">身份证号码</label>
+                                    <input type="text" class="form-input" v-model="editData.customer.ic" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">联系号码</label>
+                                    <input type="text" class="form-input" v-model="editData.customer.phone" />
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-top: 16px;">
+                                <label class="form-label">地址</label>
+                                <input type="text" class="form-input" v-model="editData.customer.address" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 2: Sales Person -->
+                    <div class="section" :class="{ collapsed: sections.salesPerson }">
+                        <div class="section-header" @click="sections.salesPerson = !sections.salesPerson">
+                            <span>🔷 第2行: 业务员资料</span>
+                            <span>{{ sections.salesPerson ? '▼' : '▲' }}</span>
+                        </div>
+                        <div class="section-content">
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label class="form-label">工程号码</label>
+                                    <input type="text" class="form-input" v-model="editData.salesPerson.projNo" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">业务员名字</label>
+                                    <input type="text" class="form-input" v-model="editData.salesPerson.name" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">业务员联系号码</label>
+                                    <input type="text" class="form-input" v-model="editData.salesPerson.phone" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">附属业务员</label>
+                                    <input type="text" class="form-input" v-model="editData.salesPerson.subSales" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">量房师</label>
+                                    <input type="text" class="form-input" v-model="editData.salesPerson.measurer" />
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">设计师名字</label>
+                                    <input type="text" class="form-input" v-model="editData.salesPerson.designer" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 3: Quote Items (Read Only) -->
+                    <div class="section" :class="{ collapsed: sections.items }">
+                        <div class="section-header" @click="sections.items = !sections.items">
+                            <span>🔷 第3行: 报价明细 (只读)</span>
+                            <span>{{ sections.items ? '▼' : '▲' }}</span>
+                        </div>
+                        <div class="section-content">
+                            <table class="entry-table">
+                                <thead>
+                                    <tr>
+                                        <th>区域</th>
+                                        <th>产品</th>
+                                        <th>尺寸 (W×H×D)</th>
+                                        <th>销售合计</th>
+                                        <th>预估成本</th>
+                                        <th>利润%</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(item, index) in editData.items" :key="index">
+                                        <td>{{ item.area }}</td>
+                                        <td>{{ item.product }}</td>
+                                        <td>{{ item.width }}×{{ item.height }}×{{ item.depth }}</td>
+                                        <td>RM {{ formatNumber(item.salePrice) }}</td>
+                                        <td>RM {{ formatNumber(item.costPrice) }}</td>
+                                        <td>{{ ((item.salePrice - item.costPrice) / item.salePrice * 100).toFixed(1) }}%</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="summary-row">
+                                <span>销售总计: RM {{ formatNumber(editData.summary.totalSales) }}</span>
+                                <span>预估成本总计: RM {{ formatNumber(editData.summary.estimatedCost) }}</span>
+                                <span>预估利润%: {{ ((editData.summary.totalSales - editData.summary.estimatedCost) / editData.summary.totalSales * 100).toFixed(1) }}%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 4: Actual Cost -->
+                    <div class="section" :class="{ collapsed: sections.actualCost }">
+                        <div class="section-header" @click="sections.actualCost = !sections.actualCost">
+                            <span>🔷 第4行: 实际成本 (SST 10%)</span>
+                            <span>{{ sections.actualCost ? '▼' : '▲' }}</span>
+                        </div>
+                        <div class="section-content">
+                            <button class="add-btn" @click="addCostEntry">➕ 添加成本</button>
+                            <table class="entry-table" style="margin-top: 12px;">
+                                <thead>
+                                    <tr>
+                                        <th>日期</th>
+                                        <th>供应商</th>
+                                        <th>成本 (RM)</th>
+                                        <th>SST 10%</th>
+                                        <th>合计 (RM)</th>
+                                        <th>操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(entry, index) in editData.actualCost.entries" :key="index">
+                                        <td><input type="date" class="form-input" v-model="entry.date" /></td>
+                                        <td><input type="text" class="form-input" v-model="entry.supplier" placeholder="供应商" /></td>
+                                        <td><input type="number" class="form-input" v-model.number="entry.cost" min="0" /></td>
+                                        <td style="text-align: center; color: #999;">+{{ (entry.cost * 0.1).toFixed(0) }}</td>
+                                        <td style="font-weight: 600;">RM {{ formatNumber(entry.cost * 1.1) }}</td>
+                                        <td><button class="btn btn-danger" style="padding: 4px 8px; font-size: 12px;" @click="removeCostEntry(index)">删除</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="summary-row">
+                                <span>成本总计: RM {{ formatNumber(actualCostTotal) }}</span>
+                                <span>成本百分比: {{ (actualCostTotal / editData.summary.totalSales * 100).toFixed(1) }}%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 5: Design Fee -->
+                    <div class="section" :class="{ collapsed: sections.designFee }">
+                        <div class="section-header" @click="sections.designFee = !sections.designFee">
+                            <span>🔷 第5行: 设计费</span>
+                            <span>{{ sections.designFee ? '▼' : '▲' }}</span>
+                        </div>
+                        <div class="section-content">
+                            <div class="form-group" style="margin-bottom: 16px;">
+                                <label class="form-label">预估设计费 (来自报价明细)</label>
+                                <input type="text" class="form-input" :value="'RM ' + formatNumber(editData.summary.estimatedDesignFee)" disabled />
+                            </div>
+                            <button class="add-btn" @click="addDesignEntry">➕ 添加设计费</button>
+                            <table class="entry-table" style="margin-top: 12px;">
+                                <thead>
+                                    <tr><th>日期</th><th>名字</th><th>设计费 (RM)</th><th>操作</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(entry, index) in editData.designFee.entries" :key="index">
+                                        <td><input type="date" class="form-input" v-model="entry.date" /></td>
+                                        <td><input type="text" class="form-input" v-model="entry.name" placeholder="名字" /></td>
+                                        <td><input type="number" class="form-input" v-model.number="entry.amount" min="0" /></td>
+                                        <td><button class="btn btn-danger" style="padding: 4px 8px; font-size: 12px;" @click="removeDesignEntry(index)">删除</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="summary-row">
+                                <span>设计费总计: RM {{ formatNumber(designFeeTotal) }}</span>
+                                <span>费用百分比: {{ (designFeeTotal / editData.summary.totalSales * 100).toFixed(1) }}%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 6: Install Fee -->
+                    <div class="section" :class="{ collapsed: sections.installFee }">
+                        <div class="section-header" @click="sections.installFee = !sections.installFee">
+                            <span>🔷 第6行: 安装费</span>
+                            <span>{{ sections.installFee ? '▼' : '▲' }}</span>
+                        </div>
+                        <div class="section-content">
+                            <div class="form-group" style="margin-bottom: 16px;">
+                                <label class="form-label">预估安装费 (来自报价明细)</label>
+                                <input type="text" class="form-input" :value="'RM ' + formatNumber(editData.summary.estimatedInstallFee)" disabled />
+                            </div>
+                            <button class="add-btn" @click="addInstallEntry">➕ 添加安装费</button>
+                            <table class="entry-table" style="margin-top: 12px;">
+                                <thead>
+                                    <tr><th>日期</th><th>名字</th><th>安装费 (RM)</th><th>操作</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(entry, index) in editData.installFee.entries" :key="index">
+                                        <td><input type="date" class="form-input" v-model="entry.date" /></td>
+                                        <td><input type="text" class="form-input" v-model="entry.name" placeholder="名字" /></td>
+                                        <td><input type="number" class="form-input" v-model.number="entry.amount" min="0" /></td>
+                                        <td><button class="btn btn-danger" style="padding: 4px 8px; font-size: 12px;" @click="removeInstallEntry(index)">删除</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="summary-row">
+                                <span>安装费总计: RM {{ formatNumber(installFeeTotal) }}</span>
+                                <span>费用百分比: {{ (installFeeTotal / editData.summary.totalSales * 100).toFixed(1) }}%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 7: Logistics Fee -->
+                    <div class="section" :class="{ collapsed: sections.logisticsFee }">
+                        <div class="section-header" @click="sections.logisticsFee = !sections.logisticsFee">
+                            <span>🔷 第7行: 物流费</span>
+                            <span>{{ sections.logisticsFee ? '▼' : '▲' }}</span>
+                        </div>
+                        <div class="section-content">
+                            <div class="form-group" style="margin-bottom: 16px;">
+                                <label class="form-label">预估物流费 (销售总计 × 2%)</label>
+                                <input type="text" class="form-input" :value="'RM ' + formatNumber(editData.summary.totalSales * 0.02)" disabled />
+                            </div>
+                            <button class="add-btn" @click="addLogisticsEntry">➕ 添加物流费</button>
+                            <table class="entry-table" style="margin-top: 12px;">
+                                <thead>
+                                    <tr><th>日期</th><th>名字</th><th>物流费 (RM)</th><th>操作</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(entry, index) in editData.logisticsFee.entries" :key="index">
+                                        <td><input type="date" class="form-input" v-model="entry.date" /></td>
+                                        <td><input type="text" class="form-input" v-model="entry.name" placeholder="名字" /></td>
+                                        <td><input type="number" class="form-input" v-model.number="entry.amount" min="0" /></td>
+                                        <td><button class="btn btn-danger" style="padding: 4px 8px; font-size: 12px;" @click="removeLogisticsEntry(index)">删除</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="summary-row">
+                                <span>物流费总计: RM {{ formatNumber(logisticsFeeTotal) }}</span>
+                                <span>费用百分比: {{ (logisticsFeeTotal / editData.summary.totalSales * 100).toFixed(1) }}%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 8: Commission -->
+                    <div class="section" :class="{ collapsed: sections.commission }">
+                        <div class="section-header" @click="sections.commission = !sections.commission">
+                            <span>🔷 第8行: 佣金</span>
+                            <span>{{ sections.commission ? '▼' : '▲' }}</span>
+                        </div>
+                        <div class="section-content">
+                            <div class="commission-grid">
+                                <div class="commission-item">
+                                    <label>业务员</label>
+                                    <div class="commission-inputs">
+                                        <input type="number" v-model.number="editData.commission.sales.percent" min="0" max="100" step="0.5" @input="updateCommission('sales')" />
+                                        <span>%</span>
+                                        <div class="commission-amount">RM {{ formatNumber(editData.commission.sales.amount) }}</div>
+                                    </div>
+                                </div>
+                                <div class="commission-item">
+                                    <label>附属业务员</label>
+                                    <div class="commission-inputs">
+                                        <input type="number" v-model.number="editData.commission.subSales.percent" min="0" max="100" step="0.5" @input="updateCommission('subSales')" />
+                                        <span>%</span>
+                                        <div class="commission-amount">RM {{ formatNumber(editData.commission.subSales.amount) }}</div>
+                                    </div>
+                                </div>
+                                <div class="commission-item">
+                                    <label>量房师</label>
+                                    <div class="commission-inputs">
+                                        <input type="number" v-model.number="editData.commission.measurer.percent" min="0" max="100" step="0.5" @input="updateCommission('measurer')" />
+                                        <span>%</span>
+                                        <div class="commission-amount">RM {{ formatNumber(editData.commission.measurer.amount) }}</div>
+                                    </div>
+                                </div>
+                                <div class="commission-item">
+                                    <label>设计师</label>
+                                    <div class="commission-inputs">
+                                        <input type="number" v-model.number="editData.commission.designer.percent" min="0" max="100" step="0.5" @input="updateCommission('designer')" />
+                                        <span>%</span>
+                                        <div class="commission-amount">RM {{ formatNumber(editData.commission.designer.amount) }}</div>
+                                    </div>
+                                </div>
+                                <div class="commission-item">
+                                    <label>总负责</label>
+                                    <div class="commission-inputs">
+                                        <input type="number" v-model.number="editData.commission.manager.percent" min="0" max="100" step="0.5" @input="updateCommission('manager')" />
+                                        <span>%</span>
+                                        <div class="commission-amount">RM {{ formatNumber(editData.commission.manager.amount) }}</div>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="summary-row">
+                                <span>佣金总计: RM {{ formatNumber(commissionTotal) }}</span>
+                                <span>佣金百分比: {{ (commissionTotal / editData.summary.totalSales * 100).toFixed(1) }}%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 9: Loss -->
+                    <div class="section" :class="{ collapsed: sections.loss }">
+                        <div class="section-header" @click="sections.loss = !sections.loss">
+                            <span>🔷 第9行: 折损</span>
+                            <span>{{ sections.loss ? '▼' : '▲' }}</span>
+                        </div>
+                        <div class="section-content">
+                            <button class="add-btn" @click="addLossEntry">➕ 添加折损</button>
+                            <table class="entry-table" style="margin-top: 12px;">
+                                <thead>
+                                    <tr><th>日期</th><th>备注</th><th>折损金额 (RM)</th><th>操作</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(entry, index) in editData.loss.entries" :key="index">
+                                        <td><input type="date" class="form-input" v-model="entry.date" /></td>
+                                        <td><input type="text" class="form-input" v-model="entry.note" placeholder="备注" /></td>
+                                        <td><input type="number" class="form-input" v-model.number="entry.amount" min="0" /></td>
+                                        <td><button class="btn btn-danger" style="padding: 4px 8px; font-size: 12px;" @click="removeLossEntry(index)">删除</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            <div class="summary-row">
+                                <span>折损总计: RM {{ formatNumber(lossTotal) }}</span>
+                                <span>折损百分比: {{ (lossTotal / editData.summary.totalSales * 100).toFixed(1) }}%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Section 10: Net Profit -->
+                    <div class="section">
+                        <div class="section-header">
+                            <span>🔷 第10行: 净利润</span>
+                        </div>
+                        <div class="section-content">
+                            <div class="net-profit-card">
+                                <div class="net-profit-grid">
+                                    <div class="net-profit-item">
+                                        <div class="net-profit-value">RM {{ formatNumber(editData.summary.totalSales) }}</div>
+                                        <div class="net-profit-label">总销售</div>
+                                    </div>
+                                    <div class="net-profit-item">
+                                        <div class="net-profit-value">RM {{ formatNumber(totalCost) }}</div>
+                                        <div class="net-profit-label">总成本</div>
+                                    </div>
+                                    <div class="net-profit-item">
+                                        <div class="net-profit-value">RM {{ formatNumber(netProfit) }}</div>
+                                        <div class="net-profit-label">总利润</div>
+                                    </div>
+                                    <div class="net-profit-item">
+                                        <div class="net-profit-value" :class="{ 'warning-badge': netProfitPercent < 25 }">
+                                            {{ netProfitPercent.toFixed(1) }}%
+                                        </div>
+                                        <div class="net-profit-label">利润百分比</div>
+                                    </div>
+                                </div>
+                                <div class="net-profit-total">
+                                    <span>总成本明细:</span>
+                                    <span>实际成本(RM {{ formatNumber(actualCostTotal) }}) + 设计费(RM {{ formatNumber(designFeeTotal) }}) + 安装费(RM {{ formatNumber(installFeeTotal) }}) + 物流费(RM {{ formatNumber(logisticsFeeTotal) }}) + 佣金(RM {{ formatNumber(commissionTotal) }}) + 折损(RM {{ formatNumber(lossTotal) }}) = RM {{ formatNumber(totalCost) }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" @click="editDialogVisible = false">取消</button>
+                    <button class="btn btn-primary" @click="saveProject">保存</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vue 3 (Global Build - Inline) -->
+    <script src="https://unpkg.com/vue@3.4.15/dist/vue.global.prod.js"></script>
+    
+    <script>
+        const { createApp, ref, computed, reactive } = Vue;
+
+        // IndexedDB for Offline Support
+        const DB_NAME = 'QuoteAnalysisDB';
+        let db = null;
+
+        async function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, 1);
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => { db = request.result; resolve(db); };
+                request.onupgradeneeded = (event) => {
+                    const database = event.target.result;
+                    if (!database.objectStoreNames.contains('quotes')) {
+                        database.createObjectStore('quotes', { keyPath: 'projNo' });
+                    }
+                    if (!database.objectStoreNames.contains('syncQueue')) {
+                        database.createObjectStore('syncQueue', { keyPath: 'id', autoIncrement: true });
+                    }
+                };
+            });
+        }
+
+        async function saveToLocal(quotes) {
+            const tx = db.transaction('quotes', 'readwrite');
+            const store = tx.objectStore('quotes');
+            await store.clear();
+            for (const quote of quotes) {
+                store.put(quote);
+            }
+        }
+
+        async function loadFromLocal() {
+            return new Promise((resolve) => {
+                const tx = db.transaction('quotes', 'readonly');
+                const store = tx.objectStore('quotes');
+                const request = store.getAll();
+                request.onsuccess = () => resolve(request.result || []);
+            });
+        }
+
+        async function saveQuoteToLocal(quote) {
+            const tx = db.transaction('quotes', 'readwrite');
+            tx.objectStore('quotes').put(quote);
+        }
+
+        async function deleteQuoteFromLocal(projNo) {
+            const tx = db.transaction('quotes', 'readwrite');
+            tx.objectStore('quotes').delete(projNo);
+        }
+
+        async function addToSyncQueue(action, projNo, data) {
+            const tx = db.transaction('syncQueue', 'readwrite');
+            tx.objectStore('syncQueue').add({ action, projNo, data, timestamp: new Date().toISOString() });
+        }
+
+        async function getSyncQueueCount() {
+            return new Promise((resolve) => {
+                const tx = db.transaction('syncQueue', 'readonly');
+                const request = tx.objectStore('syncQueue').count();
+                request.onsuccess = () => resolve(request.result);
+            });
+        }
+
+        // Demo Data
+        const demoData = [
+            {
+                projNo: 'test00', customerName: '陈大明', totalSales: 50000, totalCost: 15250, profit: 34750,
+                profitPercent: 69.5, debtPercent: 35.5, status: 'pending', lastModified: '2026-05-18',
+                customer: { date: '2026-05-15', name: '陈大明', ic: '801234-12-5678', phone: '012-3456789', address: 'No.123, Jalan Utama' },
+                salesPerson: { projNo: 'PROJ-001', name: '李业务', phone: '019-8765432', subSales: '王副业', measurer: '张量房', designer: '赵设计' },
+                items: [
+                    { area: '客厅', product: '电视柜', width: 200, height: 50, depth: 40, costPrice: 12000, salePrice: 20000 },
+                    { area: '客厅', product: '沙发', width: 300, height: 80, depth: 90, costPrice: 15000, salePrice: 25000 },
+                    { area: '餐厅', product: '餐桌', width: 150, height: 75, depth: 75, costPrice: 8000, salePrice: 5000 }
+                ],
+                summary: { totalSales: 50000, estimatedCost: 30000, estimatedDesignFee: 2000, estimatedInstallFee: 1500, estimatedLogisticsFee: 1000 },
+                actualCost: { entries: [{ date: '2026-05-10', supplier: '木材公司A', cost: 5000 }, { date: '2026-05-12', supplier: '五金店B', cost: 2000 }] },
+                designFee: { entries: [{ date: '2026-05-08', name: '赵设计', amount: 1500 }] },
+                installFee: { entries: [{ date: '2026-05-11', name: '安装团队A', amount: 1200 }] },
+                logisticsFee: { entries: [{ date: '2026-05-13', name: '物流公司A', amount: 800 }] },
+                commission: { sales: { percent: 3, amount: 1500 }, subSales: { percent: 1, amount: 500 }, measurer: { percent: 0.5, amount: 250 }, designer: { percent: 1, amount: 500 }, manager: { percent: 2, amount: 1000 } },
+                loss: { entries: [{ date: '2026-05-14', note: '材料损耗', amount: 300 }] }
+            },
+            {
+                projNo: 'test01', customerName: '李小红', totalSales: 35000, totalCost: 22000, profit: 13000,
+                profitPercent: 37.1, debtPercent: 15, status: 'completed', lastModified: '2026-05-17',
+                customer: { date: '2026-05-10', name: '李小红', ic: '900123-45-6789', phone: '011-9876543', address: 'No.45, Bandar Sunway' },
+                salesPerson: { projNo: 'PROJ-002', name: '王副业', phone: '019-7654321', subSales: '', measurer: '陈量房', designer: '刘设计' },
+                items: [
+                    { area: '主卧', product: '衣柜', width: 180, height: 220, depth: 60, costPrice: 8000, salePrice: 12000 },
+                    { area: '书房', product: '书桌', width: 120, height: 75, depth: 60, costPrice: 3000, salePrice: 5000 }
+                ],
+                summary: { totalSales: 35000, estimatedCost: 20000, estimatedDesignFee: 1500, estimatedInstallFee: 1000, estimatedLogisticsFee: 700 },
+                actualCost: { entries: [{ date: '2026-05-08', supplier: '家具厂A', cost: 10000 }] },
+                designFee: { entries: [{ date: '2026-05-05', name: '刘设计', amount: 1200 }] },
+                installFee: { entries: [{ date: '2026-05-09', name: '安装团队B', amount: 800 }] },
+                logisticsFee: { entries: [{ date: '2026-05-10', name: '物流公司B', amount: 600 }] },
+                commission: { sales: { percent: 3, amount: 1050 }, subSales: { percent: 0, amount: 0 }, measurer: { percent: 0.5, amount: 175 }, designer: { percent: 1, amount: 350 }, manager: { percent: 2, amount: 700 } },
+                loss: { entries: [] }
+            },
+            {
+                projNo: 'test02', customerName: '王大明', totalSales: 80000, totalCost: 65000, profit: 15000,
+                profitPercent: 18.8, debtPercent: 50, status: 'warning', lastModified: '2026-05-16',
+                customer: { date: '2026-05-12', name: '王大明', ic: '701234-56-7890', phone: '013-5678901', address: 'No.78, Mont Kiara' },
+                salesPerson: { projNo: 'PROJ-003', name: '张量房', phone: '018-6543210', subSales: '李业务', measurer: '张量房', designer: '陈设计' },
+                items: [
+                    { area: '客厅', product: '整体柜', width: 400, height: 240, depth: 50, costPrice: 35000, salePrice: 50000 },
+                    { area: '餐厅', product: '餐边柜', width: 200, height: 200, depth: 45, costPrice: 15000, salePrice: 30000 }
+                ],
+                summary: { totalSales: 80000, estimatedCost: 55000, estimatedDesignFee: 4000, estimatedInstallFee: 3000, estimatedLogisticsFee: 1600 },
+                actualCost: { entries: [{ date: '2026-05-10', supplier: '木材厂B', cost: 35000 }, { date: '2026-05-11', supplier: '配件商A', cost: 15000 }] },
+                designFee: { entries: [{ date: '2026-05-08', name: '陈设计', amount: 3500 }] },
+                installFee: { entries: [{ date: '2026-05-12', name: '安装团队C', amount: 2500 }] },
+                logisticsFee: { entries: [{ date: '2026-05-13', name: '物流公司C', amount: 1400 }] },
+                commission: { sales: { percent: 3, amount: 2400 }, subSales: { percent: 1, amount: 800 }, measurer: { percent: 1, amount: 800 }, designer: { percent: 2, amount: 1600 }, manager: { percent: 3, amount: 2400 } },
+                loss: { entries: [{ date: '2026-05-14', note: '配件损坏', amount: 2000 }] }
+            }
+        ];
+
+        const app = createApp({
+            setup() {
+                // State
+                const isLoading = ref(false);
+                const loadingText = ref('加载中...');
+                const isConnected = ref(false);
+                const isOnline = ref(navigator.onLine);
+                const syncQueueCount = ref(0);
+                const listData = ref([]);
+                const searchQuery = ref('');
+                const filterStatus = ref('');
+                const statusText = { pending: '进行中', completed: '已完成', warning: '预警' };
+
+                // Import Dialog
+                const importDialogVisible = ref(false);
+                const importForm = reactive({ fileId: '', selectedFile: null, overwrite: false, previewData: {} });
+                const availableFiles = ref([]);
+
+                // Edit Dialog
+                const editDialogVisible = ref(false);
+                const editData = ref(null);
+                const sections = reactive({ customer: false, salesPerson: true, items: false, actualCost: false, designFee: true, installFee: true, logisticsFee: true, commission: false, loss: true });
+
+                // Computed
+                const filteredList = computed(() => {
+                    let result = [...listData.value];
+                    if (searchQuery.value) {
+                        const query = searchQuery.value.toLowerCase();
+                        result = result.filter(item => item.projNo.toLowerCase().includes(query) || item.customerName.toLowerCase().includes(query));
+                    }
+                    if (filterStatus.value) {
+                        result = result.filter(item => item.status === filterStatus.value);
+                    }
+                    return result;
+                });
+
+                const summary = computed(() => {
+                    const data = filteredList.value;
+                    return {
+                        totalSales: data.reduce((sum, item) => sum + item.totalSales, 0),
+                        totalCost: data.reduce((sum, item) => sum + item.totalCost, 0),
+                        profit: data.reduce((sum, item) => sum + item.profit, 0),
+                        avgProfitPercent: data.length ? data.reduce((sum, item) => sum + item.profitPercent, 0) / data.length : 0
+                    };
+                });
+
+                const isAlreadyImported = computed(() => listData.value.some(item => item.projNo === (importForm.selectedFile?.name?.replace('.json', '') || '')));
+
+                const actualCostTotal = computed(() => editData.value ? editData.value.actualCost.entries.reduce((sum, entry) => sum + (entry.cost || 0) * 1.1, 0) : 0);
+                const designFeeTotal = computed(() => editData.value ? editData.value.designFee.entries.reduce((sum, entry) => sum + (entry.amount || 0), 0) : 0);
+                const installFeeTotal = computed(() => editData.value ? editData.value.installFee.entries.reduce((sum, entry) => sum + (entry.amount || 0), 0) : 0);
+                const logisticsFeeTotal = computed(() => editData.value ? editData.value.logisticsFee.entries.reduce((sum, entry) => sum + (entry.amount || 0), 0) : 0);
+                const commissionTotal = computed(() => {
+                    if (!editData.value) return 0;
+                    const c = editData.value.commission;
+                    return c.sales.amount + c.subSales.amount + c.measurer.amount + c.designer.amount + c.manager.amount;
+                });
+                const lossTotal = computed(() => editData.value ? editData.value.loss.entries.reduce((sum, entry) => sum + (entry.amount || 0), 0) : 0);
+                const totalCost = computed(() => actualCostTotal.value + designFeeTotal.value + installFeeTotal.value + logisticsFeeTotal.value + commissionTotal.value + lossTotal.value);
+                const netProfit = computed(() => editData.value ? editData.value.summary.totalSales - totalCost.value : 0);
+                const netProfitPercent = computed(() => editData.value && editData.value.summary.totalSales ? (netProfit.value / editData.value.summary.totalSales) * 100 : 0);
+
+                // Methods
+                const formatNumber = (num) => num.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+                const filterData = () => {};
+
+                const syncFromCloud = async () => {
+                    isLoading.value = true;
+                    loadingText.value = '正在同步...';
+                    try {
+                        if (navigator.onLine) {
+                            // Try to load from local first
+                            const localData = await loadFromLocal();
+                            if (localData.length > 0) {
+                                listData.value = localData;
+                                isConnected.value = true;
+                            } else {
+                                listData.value = [...demoData];
+                                await saveToLocal(demoData);
+                                isConnected.value = true;
+                            }
+                        } else {
+                            const localData = await loadFromLocal();
+                            if (localData.length > 0) {
+                                listData.value = localData;
+                            } else {
+                                listData.value = [...demoData];
+                                await saveToLocal(demoData);
+                            }
+                            isConnected.value = false;
+                        }
+                        syncQueueCount.value = await getSyncQueueCount();
+                    } catch (error) {
+                        listData.value = [...demoData];
+                    } finally {
+                        isLoading.value = false;
+                    }
+                };
+
+                const showImportDialog = () => {
+                    importDialogVisible.value = true;
+                    importForm.fileId = '';
+                    importForm.selectedFile = null;
+                    importForm.overwrite = false;
+                    importForm.previewData = {};
+                    availableFiles.value = [
+                        { id: 'file1', name: 'test00.json', modifiedTime: '2026-05-18 10:30' },
+                        { id: 'file2', name: 'test01.json', modifiedTime: '2026-05-17 14:20' },
+                        { id: 'file3', name: 'test02.json', modifiedTime: '2026-05-16 09:15' }
+                    ];
+                };
+
+                const selectImportFile = (file) => {
+                    importForm.fileId = file.id;
+                    importForm.selectedFile = file;
+                    importForm.previewData = {
+                        customerName: file.name === 'test00.json' ? '陈大明' : file.name === 'test01.json' ? '李小红' : '王大明',
+                        totalSales: file.name === 'test00.json' ? 50000 : file.name === 'test01.json' ? 35000 : 80000,
+                        debtPercent: file.name === 'test00.json' ? 35.5 : file.name === 'test01.json' ? 15 : 50
+                    };
+                };
+
+                const confirmImport = async () => {
+                    if (!importForm.selectedFile) return;
+                    const projNo = importForm.selectedFile.name.replace('.json', '');
+                    const sourceData = demoData.find(d => d.projNo === projNo) || demoData[0];
+                    const newData = { ...JSON.parse(JSON.stringify(sourceData)), projNo, customerName: importForm.previewData.customerName || projNo };
+                    const exists = listData.value.findIndex(item => item.projNo === projNo);
+                    if (exists >= 0 && !importForm.overwrite) {
+                        alert('该报价已存在，请选择覆盖或取消');
+                        return;
+                    }
+                    if (exists >= 0) {
+                        listData.value[exists] = newData;
+                    } else {
+                        listData.value.push(newData);
+                    }
+                    await saveToLocal(listData.value);
+                    await saveQuoteToLocal(newData);
+                    importDialogVisible.value = false;
+                    alert('导入成功！');
+                };
+
+                const showExportDialog = (type) => {
+                    alert('导出 ' + type.toUpperCase() + ' 功能开发中...\n\n请选择一个报价项目进行导出。');
+                };
+
+                const openEdit = (row) => {
+                    editData.value = JSON.parse(JSON.stringify(row));
+                    editDialogVisible.value = true;
+                };
+
+                const updateCommission = (role) => {
+                    if (!editData.value) return;
+                    editData.value.commission[role].amount = editData.value.summary.totalSales * editData.value.commission[role].percent / 100;
+                };
+
+                const markComplete = async (row) => {
+                    row.status = row.status === 'completed' ? 'pending' : 'completed';
+                    await saveToLocal(listData.value);
+                    await saveQuoteToLocal(row);
+                };
+
+                const deleteProject = async (row) => {
+                    if (!confirm('确定要删除 "' + row.projNo + '" 吗？')) return;
+                    listData.value = listData.value.filter(item => item.projNo !== row.projNo);
+                    await saveToLocal(listData.value);
+                    await deleteQuoteFromLocal(row.projNo);
+                };
+
+                const saveProject = async () => {
+                    if (!editData.value) return;
+                    editData.value.totalCost = totalCost.value;
+                    editData.value.profit = netProfit.value;
+                    editData.value.profitPercent = netProfitPercent.value;
+                    editData.value.lastModified = new Date().toISOString().split('T')[0];
+                    const index = listData.value.findIndex(item => item.projNo === editData.value.projNo);
+                    if (index >= 0) {
+                        listData.value[index] = JSON.parse(JSON.stringify(editData.value));
+                    }
+                    await saveToLocal(listData.value);
+                    await saveQuoteToLocal(editData.value);
+                    if (!navigator.onLine) {
+                        await addToSyncQueue('save', editData.value.projNo, editData.value);
+                        syncQueueCount.value = await getSyncQueueCount();
+                        alert('已保存到本地，网络恢复后将自动同步');
+                    } else {
+                        alert('保存成功！');
+                    }
+                    editDialogVisible.value = false;
+                };
+
+                const addCostEntry = () => editData.value.actualCost.entries.push({ date: new Date().toISOString().split('T')[0], supplier: '', cost: 0 });
+                const removeCostEntry = (index) => editData.value.actualCost.entries.splice(index, 1);
+                const addDesignEntry = () => editData.value.designFee.entries.push({ date: new Date().toISOString().split('T')[0], name: '', amount: 0 });
+                const removeDesignEntry = (index) => editData.value.designFee.entries.splice(index, 1);
+                const addInstallEntry = () => editData.value.installFee.entries.push({ date: new Date().toISOString().split('T')[0], name: '', amount: 0 });
+                const removeInstallEntry = (index) => editData.value.installFee.entries.splice(index, 1);
+                const addLogisticsEntry = () => editData.value.logisticsFee.entries.push({ date: new Date().toISOString().split('T')[0], name: '', amount: 0 });
+                const removeLogisticsEntry = (index) => editData.value.logisticsFee.entries.splice(index, 1);
+                const addLossEntry = () => editData.value.loss.entries.push({ date: new Date().toISOString().split('T')[0], note: '', amount: 0 });
+                const removeLossEntry = (index) => editData.value.loss.entries.splice(index, 1);
+                const logout = () => { if (confirm('确定要登出吗？')) alert('已登出'); };
+
+                // Network listeners
+                window.addEventListener('online', () => { isOnline.value = true; });
+                window.addEventListener('offline', () => { isOnline.value = false; });
+
+                // Init
+                initDB().then(() => syncFromCloud());
+
+                return {
+                    isLoading, loadingText, isConnected, isOnline, syncQueueCount, listData, searchQuery, filterStatus, statusText,
+                    importDialogVisible, importForm, availableFiles, editDialogVisible, editData, sections,
+                    filteredList, summary, isAlreadyImported,
+                    actualCostTotal, designFeeTotal, installFeeTotal, logisticsFeeTotal, commissionTotal, lossTotal, totalCost, netProfit, netProfitPercent,
+                    formatNumber, filterData, syncFromCloud, showImportDialog, selectImportFile, confirmImport, showExportDialog, openEdit, updateCommission, markComplete, deleteProject, saveProject,
+                    addCostEntry, removeCostEntry, addDesignEntry, removeDesignEntry, addInstallEntry, removeInstallEntry, addLogisticsEntry, removeLogisticsEntry, addLossEntry, removeLossEntry, logout
+                };
+            }
+        });
+
+        app.mount('#app');
+    </script>
+</body>
+</html>
