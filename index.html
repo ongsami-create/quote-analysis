@@ -1519,30 +1519,21 @@
                         const resp = await fetch(url.toString(), { method: 'GET', mode: 'cors' });
                         if (!resp.ok) throw new Error('HTTP ' + resp.status);
                         const result = await resp.json();
-                        if (result.success && Array.isArray(result.folders)) {
-                    availableFolders.splice(0, availableFolders.length);
-                    if (result.success && Array.isArray(result.folders)) {
-                        result.folders.forEach(f => availableFolders.push(f));
-                        console.log('[Import] Loaded folders:', result.folders.length);
-                    } else {
                         availableFolders.splice(0, availableFolders.length);
-                    }
-                } catch (e) {
-                    console.error('[Import] list_user_folders error:', e);
-                    availableFolders.splice(0, availableFolders.length);
-                } finally {
-                    isLoading.value = false;
-                }
+                        if (result.success && Array.isArray(result.folders)) {
+                            result.folders.forEach(f => availableFolders.push(f));
+                            console.log('[Import] Loaded folders:', result.folders.length);
+                        }
                     } catch (e) {
                         console.error('[Import] list_user_folders error:', e);
-                        availableFolders.value = [];
+                        availableFolders.splice(0, availableFolders.length);
                     } finally {
                         isLoading.value = false;
                     }
                 };
 
-                    const onFolderChange = async () => {
-                    if (!importForm.selectedFolder) { availableFiles.value = []; return; }
+                const onFolderChange = async () => {
+                    if (!importForm.selectedFolder) { availableFiles.splice(0, availableFiles.length); return; }
                     importForm.fileId = '';
                     importForm.selectedFile = null;
                     importForm.previewData = {};
@@ -1554,26 +1545,17 @@
                         const resp = await fetch(url.toString(), { method: 'GET', mode: 'cors' });
                         if (!resp.ok) throw new Error('HTTP ' + resp.status);
                         const result = await resp.json();
+                        availableFiles.splice(0, availableFiles.length);
                         if (result.success && Array.isArray(result.files)) {
-                            availableFiles.value = result.files;
-                        } else {
-                            availableFiles.value = [];
+                            result.files.forEach(f => availableFiles.push(f));
                         }
                     } catch (e) {
                         console.error('[Import] list_user_quote_files error:', e);
-                    availableFiles.splice(0, availableFiles.length);
-                    if (result.success && Array.isArray(result.files)) {
-                        result.files.forEach(f => availableFiles.push(f));
-                    } else {
                         availableFiles.splice(0, availableFiles.length);
+                    } finally {
+                        isLoading.value = false;
                     }
-                } catch (e) {
-                    console.error('[Import] list_user_quote_files error:', e);
-                    availableFiles.splice(0, availableFiles.length);
-                } finally {
-                    isLoading.value = false;
-                }
-            };
+                };
 
                 const selectImportFile = async (file) => {
                     importForm.fileId = file.id;
