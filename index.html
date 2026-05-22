@@ -1585,6 +1585,7 @@
                 const confirmImport = async () => {
                     if (!importForm.selectedFile) return;
                     const projNo = importForm.selectedFile.name.replace('.json', '');
+                    isLoading.value = true;
                     try {
                         const result = await gasCall('read_user_quote_file', { username: importForm.selectedFolder, fileId: importForm.selectedFile.id });
                         if (result.success && result.data) {
@@ -1603,12 +1604,12 @@
                                 salesPerson: raw.salesPerson || { projNo: raw.projNo || projNo, name: raw.salesperson || '', phone: raw.salespersonContact || '', subSales: raw.subSalesperson || '', measurer: raw.measurementEngineer || '', designer: raw.designerName || '' },
                                 items: raw.items || [],
                                 summary: raw.summary || { totalSales: raw.total || raw.grandTotal || raw.totalSales || 0 },
-                                actualCost: raw.actualCost || { entries: [] },
-                                designFee: raw.designFee || { entries: [] },
-                                installFee: raw.installFee || { entries: [] },
-                                logisticsFee: raw.logisticsFee || { entries: [] },
+                                actualCost: (raw.actualCost && Array.isArray(raw.actualCost.entries)) ? raw.actualCost : { entries: [] },
+                                designFee: (raw.designFee && Array.isArray(raw.designFee.entries)) ? raw.designFee : { entries: [] },
+                                installFee: (raw.installFee && Array.isArray(raw.installFee.entries)) ? raw.installFee : { entries: [] },
+                                logisticsFee: (raw.logisticsFee && Array.isArray(raw.logisticsFee.entries)) ? raw.logisticsFee : { entries: [] },
                                 commission: raw.commission || { sales: { percent: raw.salespersonCommissionPercent || 0, amount: raw.salespersonCommission || 0 }, subSales: { percent: raw.subSalespersonCommissionPercent || 0, amount: raw.subSalespersonCommission || 0 }, measurer: { percent: raw.measurementEngineerCommissionPercent || 0, amount: raw.measurementEngineerCommission || 0 }, designer: { percent: raw.designerCommissionPercent || 0, amount: raw.designerCommission || 0 }, manager: { percent: 0, amount: 0 } },
-                                loss: raw.loss || { entries: [] },
+                                loss: (raw.loss && Array.isArray(raw.loss.entries)) ? raw.loss : { entries: [] },
                                 _rawData: raw
                             };
                             const exists = listData.value.findIndex(item => item.projNo === projNo);
@@ -1630,6 +1631,8 @@
                         }
                     } catch (e) {
                         alert('导入失败：' + e.message);
+                    } finally {
+                        isLoading.value = false;
                     }
                 };
 
