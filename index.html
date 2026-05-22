@@ -1246,7 +1246,10 @@
         async function initDB() {
             return new Promise((resolve, reject) => {
                 const request = indexedDB.open(DB_NAME, 1);
-                request.onerror = () => reject(request.error);
+                request.onerror = () => {
+                    console.warn('[DB] IndexedDB open failed, using in-memory fallback');
+                    db = null; resolve(null); // resolve (not reject) so init chain keeps flowing
+                };
                 request.onsuccess = () => { db = request.result; resolve(db); };
                 request.onupgradeneeded = (event) => {
                     const database = event.target.result;
@@ -1261,6 +1264,7 @@
         }
 
         async function saveToLocal(quotes) {
+            if (!db) return;
             const tx = db.transaction('quotes', 'readwrite');
             const store = tx.objectStore('quotes');
             await store.clear();
@@ -1270,6 +1274,7 @@
         }
 
         async function loadFromLocal() {
+            if (!db) return [];
             return new Promise((resolve) => {
                 const tx = db.transaction('quotes', 'readonly');
                 const store = tx.objectStore('quotes');
@@ -1279,21 +1284,25 @@
         }
 
         async function saveQuoteToLocal(quote) {
+            if (!db) return;
             const tx = db.transaction('quotes', 'readwrite');
             tx.objectStore('quotes').put(quote);
         }
 
         async function deleteQuoteFromLocal(projNo) {
+            if (!db) return;
             const tx = db.transaction('quotes', 'readwrite');
             tx.objectStore('quotes').delete(projNo);
         }
 
         async function addToSyncQueue(action, projNo, data) {
+            if (!db) return;
             const tx = db.transaction('syncQueue', 'readwrite');
             tx.objectStore('syncQueue').add({ action, projNo, data, timestamp: new Date().toISOString() });
         }
 
         async function getSyncQueueCount() {
+            if (!db) return 0;
             return new Promise((resolve) => {
                 const tx = db.transaction('syncQueue', 'readonly');
                 const request = tx.objectStore('syncQueue').count();
@@ -1698,8 +1707,31 @@
                 window.addEventListener('online', () => { isOnline.value = true; });
                 window.addEventListener('offline', () => { isOnline.value = false; });
 
-                // Init
-                initDB().then(() => syncFromCloud());
+                // Init — defensive: reject → catch, safety timeout as last resort
+                console.log('[Init] Starting app...');
+                initDB()
+                    .then(() => {
+                        console.log('[Init] DB ready, syncing from cloud...');
+                        return syncFromCloud();
+                    })
+                    .catch(err => {
+                        console.error('[Init] Critical error during init:', err);
+                        isLoading.value = false;
+                        isConnected.value = false;
+                        listData.value = [...demoData];
+                        console.log('[Init] Fell back to demo data.');
+                    });
+
+                // Safety timeout — 30s max on loading screen
+                setTimeout(() => {
+                    if (isLoading.value === true) {
+                        console.warn('[Safety] Timeout — forcing loading off.');
+                        isLoading.value = false;
+                        if (!listData.value || listData.value.length === 0) {
+                            listData.value = [...demoData];
+                        }
+                    }
+                }, 30000);
 
                 return {
                     isLoading, loadingText, isConnected, isOnline, syncQueueCount, listData, searchQuery, filterStatus, statusText,
