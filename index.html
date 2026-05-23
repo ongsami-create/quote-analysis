@@ -1676,7 +1676,9 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 };
 
                 const openEdit = (row) => {
-                    editData.value = JSON.parse(JSON.stringify(row));
+                    // Deep-clone to strip any Vue reactive proxies from imported data
+                    const clean = JSON.parse(JSON.stringify(row));
+                    editData.value = clean;
                     editDialogVisible.value = true;
                 };
 
