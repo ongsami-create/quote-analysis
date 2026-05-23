@@ -1511,9 +1511,25 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 const filterData = () => {};
 
                 // GAS API Config
-                const GAS_URL = 'https://script.google.com/macros/s/AKfycbxu99CKvUNPcWiFkILKKndnwAEiYTTFtCkLvY0u7g8WEf0EPIGLjVf8NaSYyGT8Zniw/exec';
+                const GAS_URL = 'https://script.google.com/macros/s/AKfycbzKN7-S-blMgpHArGh0agAhd4w5zbt2ySM2B1ISYiY4QcCgHLmsBIpYQU59ATx7FrY5/exec';
 
-                async function gasCall(action, params = {}) {
+                async function gasCall(action, params = {}, method = 'GET') {
+                    if (method === 'POST') {
+                        try {
+                            const resp = await fetch(GAS_URL, {
+                                method: 'POST',
+                                mode: 'cors',
+                                cache: 'no-cache',
+                                headers: { 'Content-Type': 'text/plain' },
+                                body: JSON.stringify({ action, ...params })
+                            });
+                            if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                            return resp.json();
+                        } catch (e) {
+                            console.warn('GAS call failed:', action, e);
+                            return { success: false, message: e.message };
+                        }
+                    }
                     const url = new URL(GAS_URL);
                     url.searchParams.set('action', action);
                     for (const [k, v] of Object.entries(params)) {
@@ -1799,7 +1815,7 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                             const result = await gasCall('save_check_quote', {
                                 projNo: editData.value.projNo,
                                 quoteData: JSON.stringify(editData.value)
-                            });
+                            }, 'POST');
                             if (result.success) {
                                 alert('保存成功！已同步到云端');
                             } else {
