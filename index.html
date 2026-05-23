@@ -1796,11 +1796,15 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     } else {
                         // Try to save to GAS
                         try {
-                            await gasCall('save_check_quote', {
+                            const result = await gasCall('save_check_quote', {
                                 projNo: editData.value.projNo,
                                 quoteData: JSON.stringify(editData.value)
                             });
-                            alert('保存成功！已同步到云端');
+                            if (result.success) {
+                                alert('保存成功！已同步到云端');
+                            } else {
+                                alert('云端保存失败：' + (result.message || '未知错误'));
+                            }
                         } catch (e) {
                             alert('已保存到本地，云端同步失败（' + e.message + '）');
                         }
