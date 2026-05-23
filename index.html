@@ -1027,12 +1027,29 @@
                             <span>{{ sections.designFee ? '▼' : '▲' }}</span>
                         </div>
                         <div class="section-content">
+                            <div class="form-group" style="margin-bottom: 8px; font-size: 12px; color: #555;">
+                                <span>{{ editData.items.map(i => (i.productZh || i.product) + ': ' + (i.designFee || 0) + '×' + (i.value || 0) + '×' + (i.qty || 1) + '=RM' + formatNumber((i.designFee || 0) * (i.value || 0) * (i.qty || 1))).join(' + ') + ' = RM ' + formatNumber(editData.items.reduce((s, i) => s + ((i.designFee || 0) * (i.value || 0) * (i.qty || 1)), 0)) }}</span>
+                            </div>
                             <div class="form-group" style="margin-bottom: 16px;">
                                 <label class="form-label">预估设计费 (来自报价明细)</label>
-                                <input type="text" class="form-input" :value="'RM ' + formatNumber(editData.summary.estimatedDesignFee)" disabled />
+                                <input type="text" class="form-input" :value="'RM ' + formatNumber(editData.items.reduce((s, i) => s + ((i.designFee || 0) * (i.value || 0) * (i.qty || 1)), 0))" disabled />
                             </div>
+                            <button class="add-btn" @click="addDesignEntry">➕ 添加设计费</button>
+                            <table class="entry-table" style="margin-top: 12px;">
+                                <thead>
+                                    <tr><th>日期</th><th>名字</th><th>设计费 (RM)</th><th>操作</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(entry, index) in editData.designFee.entries" :key="index">
+                                        <td><input type="date" class="form-input" v-model="entry.date" /></td>
+                                        <td><input type="text" class="form-input" v-model="entry.name" placeholder="名字" /></td>
+                                        <td><input type="number" class="form-input" v-model.number="entry.amount" min="0" /></td>
+                                        <td><button class="btn btn-danger" style="padding: 4px 8px; font-size: 12px;" @click="removeDesignEntry(index)">删除</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
                             <div class="summary-row">
-                                <span>设计费总计: RM {{ formatNumber(editData.summary.estimatedDesignFee) }}</span>
+                                <span>设计费总计: RM {{ formatNumber(designFeeTotal) }}</span>
                             </div>
                         </div>
                     </div>
@@ -1044,12 +1061,29 @@
                             <span>{{ sections.installFee ? '▼' : '▲' }}</span>
                         </div>
                         <div class="section-content">
+                            <div class="form-group" style="margin-bottom: 8px; font-size: 12px; color: #555;">
+                                <span>{{ editData.items.map(i => (i.productZh || i.product) + ': ' + (i.installFee || 0) + '×' + (i.value || 0) + '×' + (i.qty || 1) + '=RM' + formatNumber((i.installFee || 0) * (i.value || 0) * (i.qty || 1))).join(' + ') + ' = RM ' + formatNumber(editData.items.reduce((s, i) => s + ((i.installFee || 0) * (i.value || 0) * (i.qty || 1)), 0)) }}</span>
+                            </div>
                             <div class="form-group" style="margin-bottom: 16px;">
                                 <label class="form-label">预估安装费 (来自报价明细)</label>
-                                <input type="text" class="form-input" :value="'RM ' + formatNumber(editData.summary.estimatedInstallFee)" disabled />
+                                <input type="text" class="form-input" :value="'RM ' + formatNumber(editData.items.reduce((s, i) => s + ((i.installFee || 0) * (i.value || 0) * (i.qty || 1)), 0))" disabled />
                             </div>
+                            <button class="add-btn" @click="addInstallEntry">➕ 添加安装费</button>
+                            <table class="entry-table" style="margin-top: 12px;">
+                                <thead>
+                                    <tr><th>日期</th><th>名字</th><th>安装费 (RM)</th><th>操作</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="(entry, index) in editData.installFee.entries" :key="index">
+                                        <td><input type="date" class="form-input" v-model="entry.date" /></td>
+                                        <td><input type="text" class="form-input" v-model="entry.name" placeholder="名字" /></td>
+                                        <td><input type="number" class="form-input" v-model.number="entry.amount" min="0" /></td>
+                                        <td><button class="btn btn-danger" style="padding: 4px 8px; font-size: 12px;" @click="removeInstallEntry(index)">删除</button></td>
+                                    </tr>
+                                </tbody>
+                            </table>
                             <div class="summary-row">
-                                <span>安装费总计: RM {{ formatNumber(editData.summary.estimatedInstallFee) }}</span>
+                                <span>安装费总计: RM {{ formatNumber(installFeeTotal) }}</span>
                             </div>
                         </div>
                     </div>
