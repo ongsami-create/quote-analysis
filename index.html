@@ -882,24 +882,24 @@
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label class="form-label">日期</label>
-                                    <input type="date" class="form-input" v-model="editData.customer.date" />
+                                    <input type="date" class="form-input" v-model="editData.customer.date" disabled />
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">客户名字</label>
-                                    <input type="text" class="form-input" v-model="editData.customer.name" />
+                                    <input type="text" class="form-input" v-model="editData.customer.name" disabled />
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">身份证号码</label>
-                                    <input type="text" class="form-input" v-model="editData.customer.ic" />
+                                    <input type="text" class="form-input" v-model="editData.customer.ic" disabled />
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">联系号码</label>
-                                    <input type="text" class="form-input" v-model="editData.customer.phone" />
+                                    <input type="text" class="form-input" v-model="editData.customer.phone" disabled />
                                 </div>
                             </div>
                             <div class="form-group" style="margin-top: 16px;">
                                 <label class="form-label">地址</label>
-                                <input type="text" class="form-input" v-model="editData.customer.address" />
+                                <input type="text" class="form-input" v-model="editData.customer.address" disabled />
                             </div>
                         </div>
                     </div>
@@ -914,27 +914,27 @@
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label class="form-label">工程号码</label>
-                                    <input type="text" class="form-input" v-model="editData.salesPerson.projNo" />
+                                    <input type="text" class="form-input" v-model="editData.salesPerson.projNo" disabled />
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">业务员名字</label>
-                                    <input type="text" class="form-input" v-model="editData.salesPerson.name" />
+                                    <input type="text" class="form-input" v-model="editData.salesPerson.name" disabled />
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">业务员联系号码</label>
-                                    <input type="text" class="form-input" v-model="editData.salesPerson.phone" />
+                                    <input type="text" class="form-input" v-model="editData.salesPerson.phone" disabled />
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">附属业务员</label>
-                                    <input type="text" class="form-input" v-model="editData.salesPerson.subSales" />
+                                    <input type="text" class="form-input" v-model="editData.salesPerson.subSales" disabled />
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">量房师</label>
-                                    <input type="text" class="form-input" v-model="editData.salesPerson.measurer" />
+                                    <input type="text" class="form-input" v-model="editData.salesPerson.measurer" disabled />
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">设计师名字</label>
-                                    <input type="text" class="form-input" v-model="editData.salesPerson.designer" />
+                                    <input type="text" class="form-input" v-model="editData.salesPerson.designer" disabled />
                                 </div>
                             </div>
                         </div>
@@ -1135,7 +1135,7 @@
                                 <div class="commission-item">
                                     <label>业务员</label>
                                     <div class="commission-inputs">
-                                        <input type="number" v-model.number="editData.commission.sales.percent" min="0" max="100" step="0.5" @input="updateCommission('sales')" />
+                                        <input type="number" v-model.number="editData.commission.sales.percent" min="0" max="100" step="0.5" @input="updateCommission('sales')" disabled />
                                         <span>%</span>
                                         <div class="commission-amount">RM {{ formatNumber(editData.commission.sales.amount) }}</div>
                                     </div>
@@ -1143,7 +1143,7 @@
                                 <div class="commission-item">
                                     <label>附属业务员</label>
                                     <div class="commission-inputs">
-                                        <input type="number" v-model.number="editData.commission.subSales.percent" min="0" max="100" step="0.5" @input="updateCommission('subSales')" />
+                                        <input type="number" v-model.number="editData.commission.subSales.percent" min="0" max="100" step="0.5" @input="updateCommission('subSales')" disabled />
                                         <span>%</span>
                                         <div class="commission-amount">RM {{ formatNumber(editData.commission.subSales.amount) }}</div>
                                     </div>
@@ -1151,7 +1151,7 @@
                                 <div class="commission-item">
                                     <label>量房师</label>
                                     <div class="commission-inputs">
-                                        <input type="number" v-model.number="editData.commission.measurer.percent" min="0" max="100" step="0.5" @input="updateCommission('measurer')" />
+                                        <input type="number" v-model.number="editData.commission.measurer.percent" min="0" max="100" step="0.5" @input="updateCommission('measurer')" disabled />
                                         <span>%</span>
                                         <div class="commission-amount">RM {{ formatNumber(editData.commission.measurer.amount) }}</div>
                                     </div>
@@ -1159,7 +1159,7 @@
                                 <div class="commission-item">
                                     <label>设计师</label>
                                     <div class="commission-inputs">
-                                        <input type="number" v-model.number="editData.commission.designer.percent" min="0" max="100" step="0.5" @input="updateCommission('designer')" />
+                                        <input type="number" v-model.number="editData.commission.designer.percent" min="0" max="100" step="0.5" @input="updateCommission('designer')" disabled />
                                         <span>%</span>
                                         <div class="commission-amount">RM {{ formatNumber(editData.commission.designer.amount) }}</div>
                                     </div>
@@ -1167,7 +1167,7 @@
                                 <div class="commission-item">
                                     <label>总负责</label>
                                     <div class="commission-inputs">
-                                        <input type="number" v-model.number="editData.commission.manager.percent" min="0" max="100" step="0.5" @input="updateCommission('manager')" />
+                                        <input type="number" v-model.number="editData.commission.manager.percent" min="0" max="100" step="0.5" @input="updateCommission('manager')" disabled />
                                         <span>%</span>
                                         <div class="commission-amount">RM {{ formatNumber(editData.commission.manager.amount) }}</div>
                                     </div>
@@ -1417,8 +1417,8 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 const editData = ref(null);
                 const sections = reactive({
                     customer: false, salesPerson: false, items: false,
-                    actualCost: false, designFee: false, installFee: false,
-                    logisticsFee: false, commission: false, loss: false
+                    actualCost: true, designFee: true, installFee: true,
+                    logisticsFee: true, commission: true, loss: true
                 });
 
                 // List / Summary computed
@@ -1757,6 +1757,34 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     const clean = JSON.parse(JSON.stringify(row));
                     editData.value = clean;
                     editDialogVisible.value = true;
+                    // Default collapsed state: customer/salesPerson/items open, others collapsed
+                    sections.customer = false;
+                    sections.salesPerson = false;
+                    sections.items = false;
+                    sections.actualCost = true;
+                    sections.designFee = true;
+                    sections.installFee = true;
+                    sections.logisticsFee = true;
+                    sections.commission = true;
+                    sections.loss = true;
+                    // Auto-expand a section when user clicks add button
+                    // (handled inline in onclick attributes via arrow function side-effects)
+                    // Watch for entries being added, auto-expand section
+                    watch(() => editData.value?.actualCost?.entries?.length, (len) => {
+                        if (len > 0) sections.actualCost = false;
+                    }, { immediate: true });
+                    watch(() => editData.value?.designFee?.entries?.length, (len) => {
+                        if (len > 0) sections.designFee = false;
+                    }, { immediate: true });
+                    watch(() => editData.value?.installFee?.entries?.length, (len) => {
+                        if (len > 0) sections.installFee = false;
+                    }, { immediate: true });
+                    watch(() => editData.value?.logisticsFee?.entries?.length, (len) => {
+                        if (len > 0) sections.logisticsFee = false;
+                    }, { immediate: true });
+                    watch(() => editData.value?.loss?.entries?.length, (len) => {
+                        if (len > 0) sections.loss = false;
+                    }, { immediate: true });
                 };
 
                 const updateCommission = (role) => {
