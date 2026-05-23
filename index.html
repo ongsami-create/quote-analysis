@@ -957,6 +957,8 @@
                                         <th>数值</th>
                                         <th>单价(RM)</th>
                                         <th>小计(RM)</th>
+                                        <th>材料成本</th>
+                                        <th>材料成本小计</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -968,12 +970,15 @@
                                         <td>{{ item.value }}</td>
                                         <td>RM {{ formatNumber(item.salePrice) }}</td>
                                         <td>RM {{ formatNumber(item.total) }}</td>
+                                        <td>RM {{ formatNumber(item.costPrice1) }}</td>
+                                        <td>RM {{ formatNumber((item.costPrice1 || 0) * (item.value || 0) * (item.qty || 1)) }}</td>
                                     </tr>
                                 </tbody>
                             </table>
                             <div class="summary-row">
                                 <span>销售总计: RM {{ formatNumber(editData.summary.totalSales) }}</span>
                                 <span>预估材料成本: RM {{ formatNumber(editData.summary.estimatedCost) }}</span>
+                                <span>预估利润%: {{ editData.summary.totalSales ? ((editData.summary.estimatedCost || 0) / editData.summary.totalSales * 100).toFixed(1) : '0.0' }}%</span>
                             </div>
                         </div>
                     </div>
