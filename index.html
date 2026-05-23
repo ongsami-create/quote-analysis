@@ -1052,6 +1052,7 @@
                             </table>
                             <div class="summary-row">
                                 <span>设计费总计: RM {{ formatNumber(designFeeTotal) }}</span>
+                                <span>成本百分比: {{ editData.summary.totalSales ? (designFeeTotal / editData.summary.totalSales * 100).toFixed(2) : '0.00' }}%</span>
                             </div>
                         </div>
                     </div>
@@ -1086,6 +1087,7 @@
                             </table>
                             <div class="summary-row">
                                 <span>安装费总计: RM {{ formatNumber(installFeeTotal) }}</span>
+                                <span>成本百分比: {{ editData.summary.totalSales ? (installFeeTotal / editData.summary.totalSales * 100).toFixed(2) : '0.00' }}%</span>
                             </div>
                         </div>
                     </div>
@@ -1117,7 +1119,7 @@
                             </table>
                             <div class="summary-row">
                                 <span>物流费总计: RM {{ formatNumber(logisticsFeeTotal) }}</span>
-                                <span>费用百分比: {{ editData.summary.totalSales ? (logisticsFeeTotal / editData.summary.totalSales * 100).toFixed(1) : '0.0' }}%</span>
+                                <span>成本百分比: {{ editData.summary.totalSales ? (logisticsFeeTotal / editData.summary.totalSales * 100).toFixed(2) : '0.00' }}%</span>
                             </div>
                         </div>
                     </div>
@@ -1173,7 +1175,7 @@
                             </div>
                             <div class="summary-row">
                                 <span>佣金总计: RM {{ formatNumber(commissionTotal) }}</span>
-                                <span>佣金百分比: {{ editData.summary.totalSales ? (commissionTotal / editData.summary.totalSales * 100).toFixed(1) : '0.0' }}%</span>
+                                <span>成本百分比: {{ editData.summary.totalSales ? (commissionTotal / editData.summary.totalSales * 100).toFixed(2) : '0.00' }}%</span>
                             </div>
                         </div>
                     </div>
@@ -1201,7 +1203,7 @@
                             </table>
                             <div class="summary-row">
                                 <span>折损总计: RM {{ formatNumber(lossTotal) }}</span>
-                                <span>折损百分比: {{ editData.summary.totalSales ? (lossTotal / editData.summary.totalSales * 100).toFixed(1) : '0.0' }}%</span>
+                                <span>成本百分比: {{ editData.summary.totalSales ? (lossTotal / editData.summary.totalSales * 100).toFixed(2) : '0.00' }}%</span>
                             </div>
                         </div>
                     </div>
