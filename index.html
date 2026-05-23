@@ -968,7 +968,7 @@
                                         <td>{{ item.width }}×{{ item.height }}×{{ item.depth }}</td>
                                         <td>{{ item.qty }}</td>
                                         <td>RM {{ formatNumber(item.salePrice) }}</td>
-                                        <td>RM {{ formatNumber(item.costPrice1) }}</td>
+                                        <td>RM {{ formatNumber((item.costPrice1 || 0) * (item.value || 0) * (item.qty || 1)) }}</td>
                                         <td>RM {{ formatNumber((item.designFee || 0) * (item.value || 0) * (item.qty || 1)) }}</td>
                                         <td>RM {{ formatNumber((item.installFee || 0) * (item.value || 0) * (item.qty || 1)) }}</td>
                                         <td>RM {{ formatNumber(item.total) }}</td>
@@ -1698,7 +1698,7 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                                 })),
                                 summary: (() => {
                                     const items = raw.items || [];
-                                    const estimatedCost = items.reduce((s, item) => s + ((item.costPrice1 || 0) * (item.qty || 1)), 0);
+                                    const estimatedCost = items.reduce((s, item) => s + ((item.costPrice1 || 0) * (item.value || 0) * (item.qty || 1)), 0);
                                     return {
                                         totalSales: raw.total || raw.grandTotal || raw.totalSales || 0,
                                         estimatedCost,
