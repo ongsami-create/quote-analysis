@@ -973,14 +973,14 @@
                                         <td>RM {{ formatNumber(item.total) }}</td>
                                         <td>RM {{ formatNumber(item.costPrice1) }}</td>
                                         <td>RM {{ formatNumber((item.costPrice1 || 0) * (item.value || 0) * (item.qty || 1)) }}</td>
-                                        <td>{{ item.total ? ((item.costPrice1 * (item.value || 0) * (item.qty || 1)) / item.total * 100).toFixed(2) : '0.00' }}%</td>
+                                        <td>{{ item.total ? ((item.total - (item.costPrice1 || 0) * (item.value || 0) * (item.qty || 1)) / item.total * 100).toFixed(2) : '0.00' }}%</td>
                                     </tr>
                                 </tbody>
                             </table>
                             <div class="summary-row">
                                 <span>销售总计: RM {{ formatNumber(editData.summary.totalSales) }}</span>
                                 <span>预估材料成本: RM {{ formatNumber(editData.items.reduce((s, i) => s + ((i.costPrice1 || 0) * (i.value || 0) * (i.qty || 1)), 0)) }}</span>
-                                <span>预估利润%: {{ editData.summary.totalSales ? ((editData.items.reduce((s, i) => s + ((i.costPrice1 || 0) * (i.value || 0) * (i.qty || 1)), 0)) / editData.summary.totalSales * 100).toFixed(1) : '0.0' }}%</span>
+                                <span>预估利润%: {{ editData.summary.totalSales ? ((editData.summary.totalSales - editData.items.reduce((s, i) => s + ((i.costPrice1 || 0) * (i.value || 0) * (i.qty || 1)), 0)) / editData.summary.totalSales * 100).toFixed(2) : '0.00' }}%</span>
                             </div>
                         </div>
                     </div>
