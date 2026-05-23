@@ -952,25 +952,32 @@
                                     <tr>
                                         <th>区域</th>
                                         <th>产品</th>
-                                        <th>尺寸 (W×H×D)</th>
-                                        <th>销售合计</th>
-                                        <th>预估成本</th>
-                                        <th>利润%</th>
+                                        <th>尺寸 W×H×D</th>
+                                        <th>数量</th>
+                                        <th>单价(RM)</th>
+                                        <th>材料成本</th>
+                                        <th>设计费</th>
+                                        <th>安装费</th>
+                                        <th>小计(RM)</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr v-for="(item, index) in editData.items" :key="index">
                                         <td>{{ item.area }}</td>
-                                        <td>{{ item.product }}</td>
+                                        <td>{{ item.product }}<br><small style="color:#888">{{ item.productZh }}</small></td>
                                         <td>{{ item.width }}×{{ item.height }}×{{ item.depth }}</td>
+                                        <td>{{ item.qty }}</td>
                                         <td>RM {{ formatNumber(item.salePrice) }}</td>
-                                        <td>RM {{ formatNumber(item.costPrice) }}</td>
-                                        <td>{{ item.salePrice ? ((item.salePrice - item.costPrice) / item.salePrice * 100).toFixed(1) : '0.0' }}%</td>
+                                        <td>RM {{ formatNumber(item.costPrice1) }}</td>
+                                        <td>RM {{ formatNumber(item.designFee) }}</td>
+                                        <td>RM {{ formatNumber(item.installFee) }}</td>
+                                        <td>RM {{ formatNumber(item.total) }}</td>
                                     </tr>
                                 </tbody>
                             </table>
                             <div class="summary-row">
                                 <span>销售总计: RM {{ formatNumber(editData.summary.totalSales) }}</span>
+                                <span>折扣: RM {{ formatNumber(editData.summary.discount || 0) }}</span>
                                 <span>预估成本总计: RM {{ formatNumber(editData.summary.estimatedCost) }}</span>
                                 <span>预估利润%: {{ editData.summary.totalSales ? ((editData.summary.totalSales - (editData.summary.estimatedCost || 0)) / editData.summary.totalSales * 100).toFixed(1) : '0.0' }}%</span>
                             </div>
@@ -1627,7 +1634,7 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                             const raw = result.data;
                             const newData = {
                                 projNo,
-                                customerName: raw.customerName || raw.customer?.name || projNo,
+                                customerName: raw.customerName || projNo,
                                 totalSales: raw.total || raw.grandTotal || raw.totalSales || 0,
                                 totalCost: raw.totalCost || 0,
                                 profit: raw.profit || 0,
@@ -1635,16 +1642,79 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                                 debtPercent: raw.debtPercent || 0,
                                 status: raw.status || 'pending',
                                 lastModified: raw.lastModified || new Date().toISOString().split('T')[0],
-                                customer: raw.customer || {},
-                                salesPerson: raw.salesPerson || { projNo: raw.projNo || projNo, name: raw.salesperson || '', phone: raw.salespersonContact || '', subSales: raw.subSalesperson || '', measurer: raw.measurementEngineer || '', designer: raw.designerName || '' },
-                                items: raw.items || [],
-                                summary: raw.summary || { totalSales: raw.total || raw.grandTotal || raw.totalSales || 0 },
+                                discount: raw.discount || 0,
+                                customer: {
+                                    date: raw.date || '',
+                                    name: raw.customerName || '',
+                                    ic: raw.customerIC || '',
+                                    phone: raw.customerContact || '',
+                                    address: raw.customerAddress || ''
+                                },
+                                salesPerson: {
+                                    projNo: raw.projNo || projNo,
+                                    name: raw.salesperson || '',
+                                    phone: raw.salespersonContact || '',
+                                    subSales: raw.subSalesperson || '',
+                                    measurer: raw.measurementEngineer || '',
+                                    designer: raw.designerName || ''
+                                },
+                                items: (raw.items || []).map(item => ({
+                                    area: item.area || '',
+                                    product: item.itemB || item.itemBZh || '',
+                                    productZh: item.itemBZh || '',
+                                    description: item.description || '',
+                                    noteA: item.noteA || '',
+                                    noteACn: item.noteACn || '',
+                                    noteB: item.noteB || '',
+                                    noteBCn: item.noteBCn || '',
+                                    unitPrice: item.unitPrice || 0,
+                                    salePrice: item.unitPrice || 0,
+                                    costPrice: item.costPrice || 0,
+                                    costPrice1: item.costPrice1 || 0,
+                                    algorithm: item.algorithm || '',
+                                    designFee: item.designFee || 0,
+                                    installFee: item.installFee || 0,
+                                    w: item.w || 0,
+                                    h: item.h || 0,
+                                    d: item.d || 0,
+                                    width: item.w || 0,
+                                    height: item.h || 0,
+                                    depth: item.d || 0,
+                                    value: item.value || 0,
+                                    qty: item.qty || 1,
+                                    remarks: item.remarks || '',
+                                    discount: item.discount || false,
+                                    discountPercent: item.discountPercent || 0,
+                                    specialCraft: item.specialCraft || false,
+                                    specialCraftAmount: item.specialCraftAmount || 0,
+                                    foc: item.foc || false,
+                                    special: item.special || false,
+                                    specialPercent: item.specialPercent || 0,
+                                    adjEnabled: item.adjEnabled || false,
+                                    adj: item.adj || 0,
+                                    total: item.total || 0
+                                })),
+                                summary: (() => {
+                                    const items = raw.items || [];
+                                    const estimatedCost = items.reduce((s, item) => s + ((item.costPrice1 || 0) * (item.qty || 1)), 0);
+                                    return {
+                                        totalSales: raw.total || raw.grandTotal || raw.totalSales || 0,
+                                        estimatedCost,
+                                        estimatedDesignFee: raw.estimatedDesignFee || items.reduce((s, item) => s + (item.designFee || 0), 0),
+                                        estimatedInstallFee: raw.estimatedInstallFee || items.reduce((s, item) => s + (item.installFee || 0), 0),
+                                        discount: raw.discount || 0
+                                    };
+                                })(),
                                 actualCost: (raw.actualCost && Array.isArray(raw.actualCost.entries)) ? raw.actualCost : { entries: [] },
                                 designFee: (raw.designFee && Array.isArray(raw.designFee.entries)) ? raw.designFee : { entries: [] },
                                 installFee: (raw.installFee && Array.isArray(raw.installFee.entries)) ? raw.installFee : { entries: [] },
                                 logisticsFee: (raw.logisticsFee && Array.isArray(raw.logisticsFee.entries)) ? raw.logisticsFee : { entries: [] },
                                 commission: raw.commission || { sales: { percent: raw.salespersonCommissionPercent || 0, amount: raw.salespersonCommission || 0 }, subSales: { percent: raw.subSalespersonCommissionPercent || 0, amount: raw.subSalespersonCommission || 0 }, measurer: { percent: raw.measurementEngineerCommissionPercent || 0, amount: raw.measurementEngineerCommission || 0 }, designer: { percent: raw.designerCommissionPercent || 0, amount: raw.designerCommission || 0 }, manager: { percent: 0, amount: 0 } },
                                 loss: (raw.loss && Array.isArray(raw.loss.entries)) ? raw.loss : { entries: [] },
+                                fees: raw.fees || {},
+                                customFees: raw.customFees || [],
+                                depositRecords: raw.depositRecords || [],
+                                feeRemarks: raw.feeRemarks || '',
                                 _rawData: raw
                             };
                             const exists = listData.value.findIndex(item => item.projNo === projNo);
