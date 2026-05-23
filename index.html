@@ -954,10 +954,8 @@
                                         <th>产品</th>
                                         <th>尺寸 W×H×D</th>
                                         <th>数量</th>
+                                        <th>数值</th>
                                         <th>单价(RM)</th>
-                                        <th>材料成本</th>
-                                        <th>设计费</th>
-                                        <th>安装费</th>
                                         <th>小计(RM)</th>
                                     </tr>
                                 </thead>
@@ -967,21 +965,15 @@
                                         <td>{{ item.product }}<br><small style="color:#888">{{ item.productZh }}</small></td>
                                         <td>{{ item.width }}×{{ item.height }}×{{ item.depth }}</td>
                                         <td>{{ item.qty }}</td>
+                                        <td>{{ item.value }}</td>
                                         <td>RM {{ formatNumber(item.salePrice) }}</td>
-                                        <td>RM {{ formatNumber((item.costPrice1 || 0) * (item.value || 0) * (item.qty || 1)) }}</td>
-                                        <td>RM {{ formatNumber((item.designFee || 0) * (item.value || 0) * (item.qty || 1)) }}</td>
-                                        <td>RM {{ formatNumber((item.installFee || 0) * (item.value || 0) * (item.qty || 1)) }}</td>
                                         <td>RM {{ formatNumber(item.total) }}</td>
                                     </tr>
                                 </tbody>
                             </table>
                             <div class="summary-row">
                                 <span>销售总计: RM {{ formatNumber(editData.summary.totalSales) }}</span>
-                                <span>折扣: RM {{ formatNumber(editData.summary.discount || 0) }}</span>
-                                <span>预估成本: RM {{ formatNumber(editData.summary.estimatedCost) }}</span>
-                                <span>预估设计费: RM {{ formatNumber(editData.summary.estimatedDesignFee) }}</span>
-                                <span>预估安装费: RM {{ formatNumber(editData.summary.estimatedInstallFee) }}</span>
-                                <span>预估利润%: {{ editData.summary.totalSales ? ((editData.summary.totalSales - (editData.summary.estimatedCost || 0)) / editData.summary.totalSales * 100).toFixed(1) : '0.0' }}%</span>
+                                <span>预估材料成本: RM {{ formatNumber(editData.summary.estimatedCost) }}</span>
                             </div>
                         </div>
                     </div>
@@ -1034,7 +1026,6 @@
                                 <label class="form-label">预估设计费 (来自报价明细)</label>
                                 <input type="text" class="form-input" :value="'RM ' + formatNumber(editData.summary.estimatedDesignFee)" disabled />
                             </div>
-                            <button class="add-btn" @click="addDesignEntry">➕ 添加设计费</button>
                             <table class="entry-table" style="margin-top: 12px;">
                                 <thead>
                                     <tr><th>日期</th><th>名字</th><th>设计费 (RM)</th><th>操作</th></tr>
@@ -1066,7 +1057,6 @@
                                 <label class="form-label">预估安装费 (来自报价明细)</label>
                                 <input type="text" class="form-input" :value="'RM ' + formatNumber(editData.summary.estimatedInstallFee)" disabled />
                             </div>
-                            <button class="add-btn" @click="addInstallEntry">➕ 添加安装费</button>
                             <table class="entry-table" style="margin-top: 12px;">
                                 <thead>
                                     <tr><th>日期</th><th>名字</th><th>安装费 (RM)</th><th>操作</th></tr>
