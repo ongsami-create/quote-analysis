@@ -959,19 +959,21 @@
                                         <th>小计(RM)</th>
                                         <th>材料成本</th>
                                         <th>材料成本小计</th>
+                                        <th>%</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     <tr v-for="(item, index) in editData.items" :key="index">
                                         <td>{{ item.area }}</td>
                                         <td>{{ item.product }}<br><small style="color:#888">{{ item.productZh }}</small></td>
-                                        <td>{{ item.width }}×{{ item.height }}×{{ item.depth }}</td>
-                                        <td>{{ item.qty }}</td>
-                                        <td>{{ item.value }}</td>
+                                        <td>{{ (item.width || 0).toFixed(2) }}×{{ (item.height || 0).toFixed(2) }}×{{ (item.depth || 0).toFixed(2) }}</td>
+                                        <td>{{ (item.qty || 0).toFixed(2) }}</td>
+                                        <td>{{ (item.value || 0).toFixed(2) }}</td>
                                         <td>RM {{ formatNumber(item.salePrice) }}</td>
                                         <td>RM {{ formatNumber(item.total) }}</td>
                                         <td>RM {{ formatNumber(item.costPrice1) }}</td>
                                         <td>RM {{ formatNumber((item.costPrice1 || 0) * (item.value || 0) * (item.qty || 1)) }}</td>
+                                        <td>{{ item.total ? ((item.costPrice1 * (item.value || 0) * (item.qty || 1)) / item.total * 100).toFixed(2) : '0.00' }}%</td>
                                     </tr>
                                 </tbody>
                             </table>
@@ -1502,7 +1504,7 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 const netProfitPercent = computed(() => editData.value && editData.value.summary.totalSales ? (netProfit.value / editData.value.summary.totalSales) * 100 : 0);
 
                 // Methods
-                const formatNumber = (num) => (num ?? 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+                const formatNumber = (num) => (num ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
                 const filterData = () => {};
 
