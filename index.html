@@ -1395,6 +1395,38 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 const filterStatus = ref('');
                 const statusText = { pending: '进行中', completed: '已完成', warning: '预警' };
 
+                // Edit Dialog
+                const editDialogVisible = ref(false);
+                const editData = ref(null);
+                const sections = reactive({
+                    customer: false, salesPerson: false, items: false,
+                    actualCost: false, designFee: false, installFee: false,
+                    logisticsFee: false, commission: false, loss: false
+                });
+
+                // List / Summary computed
+                const filteredList = computed(() => {
+                    return listData.value.filter(item => {
+                        const matchSearch = !searchQuery.value ||
+                            item.projNo?.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
+                            item.customerName?.toLowerCase().includes(searchQuery.value.toLowerCase());
+                        const matchStatus = !filterStatus.value || item.status === filterStatus.value;
+                        return matchSearch && matchStatus;
+                    });
+                });
+
+                const summary = computed(() => {
+                    const items = filteredList.value;
+                    return {
+                        totalSales: items.reduce((s, i) => s + (i.totalSales || 0), 0),
+                        totalCost: items.reduce((s, i) => s + (i.totalCost || 0), 0),
+                        profit: items.reduce((s, i) => s + (i.profit || 0), 0),
+                        avgProfitPercent: items.length
+                            ? items.reduce((s, i) => s + (i.profitPercent || 0), 0) / items.length
+                            : 0
+                    };
+                });
+
                 // Import Dialog
                 const importDialogVisible = ref(false);
                 const importForm = reactive({ fileId: '', selectedFile: null, overwrite: false, previewData: {}, selectedFolder: '' });
