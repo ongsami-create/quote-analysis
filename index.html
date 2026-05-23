@@ -977,8 +977,8 @@
                             </table>
                             <div class="summary-row">
                                 <span>销售总计: RM {{ formatNumber(editData.summary.totalSales) }}</span>
-                                <span>预估材料成本: RM {{ formatNumber(editData.summary.estimatedCost) }}</span>
-                                <span>预估利润%: {{ editData.summary.totalSales ? ((editData.summary.estimatedCost || 0) / editData.summary.totalSales * 100).toFixed(1) : '0.0' }}%</span>
+                                <span>预估材料成本: RM {{ formatNumber(editData.items.reduce((s, i) => s + ((i.costPrice1 || 0) * (i.value || 0) * (i.qty || 1)), 0)) }}</span>
+                                <span>预估利润%: {{ editData.summary.totalSales ? ((editData.items.reduce((s, i) => s + ((i.costPrice1 || 0) * (i.value || 0) * (i.qty || 1)), 0)) / editData.summary.totalSales * 100).toFixed(1) : '0.0' }}%</span>
                             </div>
                         </div>
                     </div>
