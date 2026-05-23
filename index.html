@@ -882,24 +882,24 @@
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label class="form-label">日期</label>
-                                    <input type="date" class="form-input" v-model="editData.customer.date" />
+                                    <input type="date" class="form-input" v-model="editData.customer.date" readonly />
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">客户名字</label>
-                                    <input type="text" class="form-input" v-model="editData.customer.name" />
+                                    <input type="text" class="form-input" v-model="editData.customer.name" readonly />
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">身份证号码</label>
-                                    <input type="text" class="form-input" v-model="editData.customer.ic" />
+                                    <input type="text" class="form-input" v-model="editData.customer.ic" readonly />
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">联系号码</label>
-                                    <input type="text" class="form-input" v-model="editData.customer.phone" />
+                                    <input type="text" class="form-input" v-model="editData.customer.phone" readonly />
                                 </div>
                             </div>
                             <div class="form-group" style="margin-top: 16px;">
                                 <label class="form-label">地址</label>
-                                <input type="text" class="form-input" v-model="editData.customer.address" />
+                                <input type="text" class="form-input" v-model="editData.customer.address" readonly />
                             </div>
                         </div>
                     </div>
@@ -914,27 +914,27 @@
                             <div class="form-grid">
                                 <div class="form-group">
                                     <label class="form-label">工程号码</label>
-                                    <input type="text" class="form-input" v-model="editData.salesPerson.projNo" />
+                                    <input type="text" class="form-input" v-model="editData.salesPerson.projNo" readonly />
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">业务员名字</label>
-                                    <input type="text" class="form-input" v-model="editData.salesPerson.name" />
+                                    <input type="text" class="form-input" v-model="editData.salesPerson.name" readonly />
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">业务员联系号码</label>
-                                    <input type="text" class="form-input" v-model="editData.salesPerson.phone" />
+                                    <input type="text" class="form-input" v-model="editData.salesPerson.phone" readonly />
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">附属业务员</label>
-                                    <input type="text" class="form-input" v-model="editData.salesPerson.subSales" />
+                                    <input type="text" class="form-input" v-model="editData.salesPerson.subSales" readonly />
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">量房师</label>
-                                    <input type="text" class="form-input" v-model="editData.salesPerson.measurer" />
+                                    <input type="text" class="form-input" v-model="editData.salesPerson.measurer" readonly />
                                 </div>
                                 <div class="form-group">
                                     <label class="form-label">设计师名字</label>
-                                    <input type="text" class="form-input" v-model="editData.salesPerson.designer" />
+                                    <input type="text" class="form-input" v-model="editData.salesPerson.designer" readonly />
                                 </div>
                             </div>
                         </div>
@@ -1417,8 +1417,8 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 const editData = ref(null);
                 const sections = reactive({
                     customer: false, salesPerson: false, items: false,
-                    actualCost: false, designFee: false, installFee: false,
-                    logisticsFee: false, commission: false, loss: false
+                    actualCost: true, designFee: true, installFee: true,
+                    logisticsFee: true, commission: true, loss: true
                 });
 
                 // List / Summary computed
@@ -1808,16 +1808,16 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     editDialogVisible.value = false;
                 };
 
-                const addCostEntry = () => editData.value.actualCost.entries.push({ date: new Date().toISOString().split('T')[0], supplier: '', cost: 0 });
-                const removeCostEntry = (index) => editData.value.actualCost.entries.splice(index, 1);
-                const addDesignEntry = () => editData.value.designFee.entries.push({ date: new Date().toISOString().split('T')[0], name: '', amount: 0 });
-                const removeDesignEntry = (index) => editData.value.designFee.entries.splice(index, 1);
-                const addInstallEntry = () => editData.value.installFee.entries.push({ date: new Date().toISOString().split('T')[0], name: '', amount: 0 });
-                const removeInstallEntry = (index) => editData.value.installFee.entries.splice(index, 1);
-                const addLogisticsEntry = () => editData.value.logisticsFee.entries.push({ date: new Date().toISOString().split('T')[0], name: '', amount: 0 });
-                const removeLogisticsEntry = (index) => editData.value.logisticsFee.entries.splice(index, 1);
-                const addLossEntry = () => editData.value.loss.entries.push({ date: new Date().toISOString().split('T')[0], note: '', amount: 0 });
-                const removeLossEntry = (index) => editData.value.loss.entries.splice(index, 1);
+                const addCostEntry = () => { editData.value.actualCost.entries.push({ date: new Date().toISOString().split('T')[0], supplier: '', cost: 0 }); sections.actualCost = false; };
+                const removeCostEntry = (index) => { editData.value.actualCost.entries.splice(index, 1); if (!editData.value.actualCost.entries.length) sections.actualCost = true; };
+                const addDesignEntry = () => { editData.value.designFee.entries.push({ date: new Date().toISOString().split('T')[0], name: '', amount: 0 }); sections.designFee = false; };
+                const removeDesignEntry = (index) => { editData.value.designFee.entries.splice(index, 1); if (!editData.value.designFee.entries.length) sections.designFee = true; };
+                const addInstallEntry = () => { editData.value.installFee.entries.push({ date: new Date().toISOString().split('T')[0], name: '', amount: 0 }); sections.installFee = false; };
+                const removeInstallEntry = (index) => { editData.value.installFee.entries.splice(index, 1); if (!editData.value.installFee.entries.length) sections.installFee = true; };
+                const addLogisticsEntry = () => { editData.value.logisticsFee.entries.push({ date: new Date().toISOString().split('T')[0], name: '', amount: 0 }); sections.logisticsFee = false; };
+                const removeLogisticsEntry = (index) => { editData.value.logisticsFee.entries.splice(index, 1); if (!editData.value.logisticsFee.entries.length) sections.logisticsFee = true; };
+                const addLossEntry = () => { editData.value.loss.entries.push({ date: new Date().toISOString().split('T')[0], note: '', amount: 0 }); sections.loss = false; };
+                const removeLossEntry = (index) => { editData.value.loss.entries.splice(index, 1); if (!editData.value.loss.entries.length) sections.loss = true; };
                 const logout = () => { if (confirm('确定要登出吗？')) alert('已登出'); };
 
                 // Network listeners
