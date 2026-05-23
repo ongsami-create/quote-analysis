@@ -1562,38 +1562,6 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     }
                 };
 
-                const onFolderChange = async () => {
-                    console.log('[onFolderChange] triggered, folder:', importForm.selectedFolder);
-                    if (!importForm.selectedFolder) { availableFiles.value = []; return; }
-                    importForm.fileId = '';
-                    importForm.selectedFile = null;
-                    importForm.previewData = {};
-                    importLoading.value = true;
-                    try {
-                        const url = new URL(GAS_URL);
-                        url.searchParams.set('action', 'list_user_quote_files');
-                        url.searchParams.set('username', importForm.selectedFolder);
-                        console.log('[Import] Fetching files for user:', importForm.selectedFolder);
-                        const resp = await fetch(url.toString(), { method: 'GET', mode: 'cors' });
-                        console.log('[Import] HTTP status:', resp.status);
-                        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-                        const result = await resp.json();
-                        console.log('[Import] API response:', JSON.stringify(result));
-                        if (result.success && Array.isArray(result.files)) {
-                            availableFiles.value = result.files;
-                            console.log('[Import] Loaded files:', result.files.length);
-                        } else {
-                            availableFiles.value = [];
-                            console.warn('[Import] No files or result format unexpected:', result);
-                        }
-                    } catch (e) {
-                        console.error('[Import] list_user_quote_files error:', e);
-                        availableFiles.value = [];
-                    } finally {
-                        importLoading.value = false;
-                    }
-                };
-
                 const selectImportFile = async (file) => {
                     importForm.fileId = file.id;
                     importForm.selectedFile = file;
