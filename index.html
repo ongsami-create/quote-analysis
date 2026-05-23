@@ -969,8 +969,8 @@
                                         <td>{{ item.qty }}</td>
                                         <td>RM {{ formatNumber(item.salePrice) }}</td>
                                         <td>RM {{ formatNumber(item.costPrice1) }}</td>
-                                        <td>RM {{ formatNumber(item.designFee) }}</td>
-                                        <td>RM {{ formatNumber(item.installFee) }}</td>
+                                        <td>RM {{ formatNumber((item.designFee || 0) * (item.value || 0) * (item.qty || 1)) }}</td>
+                                        <td>RM {{ formatNumber((item.installFee || 0) * (item.value || 0) * (item.qty || 1)) }}</td>
                                         <td>RM {{ formatNumber(item.total) }}</td>
                                     </tr>
                                 </tbody>
@@ -978,7 +978,9 @@
                             <div class="summary-row">
                                 <span>销售总计: RM {{ formatNumber(editData.summary.totalSales) }}</span>
                                 <span>折扣: RM {{ formatNumber(editData.summary.discount || 0) }}</span>
-                                <span>预估成本总计: RM {{ formatNumber(editData.summary.estimatedCost) }}</span>
+                                <span>预估成本: RM {{ formatNumber(editData.summary.estimatedCost) }}</span>
+                                <span>预估设计费: RM {{ formatNumber(editData.summary.estimatedDesignFee) }}</span>
+                                <span>预估安装费: RM {{ formatNumber(editData.summary.estimatedInstallFee) }}</span>
                                 <span>预估利润%: {{ editData.summary.totalSales ? ((editData.summary.totalSales - (editData.summary.estimatedCost || 0)) / editData.summary.totalSales * 100).toFixed(1) : '0.0' }}%</span>
                             </div>
                         </div>
@@ -1700,8 +1702,8 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                                     return {
                                         totalSales: raw.total || raw.grandTotal || raw.totalSales || 0,
                                         estimatedCost,
-                                        estimatedDesignFee: raw.estimatedDesignFee || items.reduce((s, item) => s + (item.designFee || 0), 0),
-                                        estimatedInstallFee: raw.estimatedInstallFee || items.reduce((s, item) => s + (item.installFee || 0), 0),
+                                        estimatedDesignFee: items.reduce((s, item) => s + ((item.designFee || 0) * (item.value || 0) * (item.qty || 1)), 0),
+                                        estimatedInstallFee: items.reduce((s, item) => s + ((item.installFee || 0) * (item.value || 0) * (item.qty || 1)), 0),
                                         discount: raw.discount || 0
                                     };
                                 })(),
