@@ -1285,7 +1285,9 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
             const store = tx.objectStore('quotes');
             await store.clear();
             for (const quote of quotes) {
-                store.put(quote);
+                // Strip non-clonable fields and deep-clone to plain objects before storing
+                const { _rawData, ...clean } = quote;
+                store.put(JSON.parse(JSON.stringify(clean)));
             }
         }
 
@@ -1302,7 +1304,8 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
         async function saveQuoteToLocal(quote) {
             if (!db) return;
             const tx = db.transaction('quotes', 'readwrite');
-            tx.objectStore('quotes').put(quote);
+            const { _rawData, ...clean } = quote;
+            tx.objectStore('quotes').put(JSON.parse(JSON.stringify(clean)));
         }
 
         async function deleteQuoteFromLocal(projNo) {
