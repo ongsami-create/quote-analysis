@@ -1323,9 +1323,19 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
         }
 
         async function deleteQuoteFromLocal(projNo) {
-            if (!db) return;
+            if (!db) return null;
             const tx = db.transaction('quotes', 'readwrite');
             tx.objectStore('quotes').delete(projNo);
+        }
+
+        async function getQuoteFromLocal(projNo) {
+            if (!db) return null;
+            return new Promise((resolve) => {
+                const tx = db.transaction('quotes', 'readonly');
+                const request = tx.objectStore('quotes').get(projNo);
+                request.onsuccess = () => resolve(request.result || null);
+                request.onerror = () => resolve(null);
+            });
         }
 
         async function addToSyncQueue(action, projNo, data) {
@@ -1768,11 +1778,46 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     alert('导出 ' + type.toUpperCase() + ' 功能开发中...\n\n请选择一个报价项目进行导出。');
                 };
 
-                const openEdit = (row) => {
-                    // Deep-clone to strip any Vue reactive proxies from imported data
-                    const clean = JSON.parse(JSON.stringify(row));
-                    editData.value = clean;
-                    editDialogVisible.value = true;
+                const openEdit = async (row) => {
+                    // Step 1: Try local first (faster + works offline).
+                    // Local IndexedDB stores the FULL quote (customer/items/actualCost/...).
+                    let full = null;
+                    try {
+                        full = await getQuoteFromLocal(row.projNo);
+                    } catch (e) {
+                        console.warn('[openEdit] local read failed:', e);
+                    }
+
+                    // Step 2: If local has the full structure, use it.
+                    // Otherwise fetch from cloud (cloud list endpoint returns summary only).
+                    if (full && full.customer && full.items) {
+                        editData.value = JSON.parse(JSON.stringify(full));
+                        editDialogVisible.value = true;
+                        return;
+                    }
+
+                    if (!navigator.onLine) {
+                        alert('离线且本地没有该报价的完整数据，无法编辑');
+                        return;
+                    }
+
+                    try {
+                        isLoading.value = true;
+                        loadingText.value = '正在加载报价详情...';
+                        const result = await gasCall('get_check_quote', { projNo: row.projNo });
+                        if (result.success && result.quote) {
+                            editData.value = JSON.parse(JSON.stringify(result.quote));
+                            // Cache the full version locally for next time / offline
+                            await saveQuoteToLocal(editData.value);
+                            editDialogVisible.value = true;
+                        } else {
+                            alert('加载报价详情失败：' + (result.message || '未知错误'));
+                        }
+                    } catch (e) {
+                        alert('加载报价详情失败：' + e.message);
+                    } finally {
+                        isLoading.value = false;
+                    }
                 };
 
                 const updateCommission = (role) => {
