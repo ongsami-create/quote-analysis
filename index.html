@@ -700,6 +700,9 @@
                 <button class="btn btn-secondary" @click="syncFromCloud">
                     🔄 同步云端
                 </button>
+                <button class="btn btn-secondary" @click="cleanAnalysisFolder" style="background:#c62828;color:#fff;" title="清空 squirrel analysis/ 下的所有 check_*.json（一次性调试按钮）">
+                    🧹 清理脏数据
+                </button>
             </div>
 
             <!-- Filter Bar -->
@@ -1867,6 +1870,30 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     editData.value.commission[role].amount = editData.value.summary.totalSales * editData.value.commission[role].percent / 100;
                 };
 
+                const cleanAnalysisFolder = async () => {
+                    if (!confirm('确定要清空 squirrel analysis/ 下所有 check_*.json 吗？\n\n这是调试用按钮，会清掉所有已保存的报价分析。')) return;
+                    if (!navigator.onLine) {
+                        alert('需要联网才能清理云端数据');
+                        return;
+                    }
+                    isLoading.value = true;
+                    loadingText.value = '正在清理云端脏数据...';
+                    try {
+                        const result = await gasCall('clean_analysis_folder');
+                        if (result.success) {
+                            alert('清理成功：' + result.message + '\n已清掉的文件：\n' + (result.removed || []).join('\n'));
+                            // 重新同步云端（应该是空列表了）
+                            await syncFromCloud();
+                        } else {
+                            alert('清理失败：' + (result.message || '未知错误'));
+                        }
+                    } catch (e) {
+                        alert('清理失败：' + e.message);
+                    } finally {
+                        isLoading.value = false;
+                    }
+                };
+
                 const markComplete = async (row) => {
                     row.status = row.status === 'completed' ? 'pending' : 'completed';
                     await saveToLocal(listData.value);
@@ -1901,7 +1928,7 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                         try {
                             const result = await gasCall('save_check_quote', {
                                 projNo: editData.value.projNo,
-                                quoteData: JSON.stringify(editData.value)
+                                quoteData: editData.value
                             }, 'POST');
                             if (result.success) {
                                 alert('保存成功！已同步到云端');
@@ -1962,7 +1989,7 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     importDialogVisible, importForm, availableFiles, availableFolders, importLoading, editDialogVisible, editData, sections,
                     filteredList, summary, isAlreadyImported,
                     actualCostTotal, designFeeTotal, installFeeTotal, logisticsFeeTotal, commissionTotal, lossTotal, totalCost, netProfit, netProfitPercent,
-                    formatNumber, filterData, syncFromCloud, showImportDialog, selectImportFile, confirmImport, showExportDialog, openEdit, updateCommission, markComplete, deleteProject, saveProject,
+                    formatNumber, filterData, syncFromCloud, cleanAnalysisFolder, showImportDialog, selectImportFile, confirmImport, showExportDialog, openEdit, updateCommission, markComplete, deleteProject, saveProject,
                     addCostEntry, removeCostEntry, addDesignEntry, removeDesignEntry, addInstallEntry, removeInstallEntry, addLogisticsEntry, removeLogisticsEntry, addLossEntry, removeLossEntry, logout
                 };
             }

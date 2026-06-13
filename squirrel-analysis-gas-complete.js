@@ -1109,6 +1109,31 @@ function saveCheckQuote(projNo, quoteData) {
 }
 
 /**
+ * 清空 squirrel analysis/ 文件夹里所有 check_*.json
+ * action: clean_analysis_folder
+ * DEBUG ONLY: 用来清掉双重 JSON 编码的脏数据
+ */
+function cleanAnalysisFolder() {
+  try {
+    initializeFolders();
+    const files = analysisFolder.getFiles();
+    const removed = [];
+    while (files.hasNext()) {
+      const file = files.next();
+      const name = file.getName();
+      if (name.startsWith('check_') && name.endsWith('.json')) {
+        file.setTrashed(true);
+        removed.push(name);
+      }
+    }
+    logActivity('system', 'clean_analysis_folder', '-', 'Removed ' + removed.length + ' files: ' + removed.join(', '));
+    return { success: true, message: 'Removed ' + removed.length + ' files', removed: removed };
+  } catch (error) {
+    return { success: false, message: error.toString() };
+  }
+}
+
+/**
  * 列出 squirrel analysis/ 文件夹中所有已保存的报价分析
  * action: get_check_quote_list
  */
@@ -1337,6 +1362,9 @@ function doGet(e) {
         break;
       case 'get_check_quote_list':
         result = getCheckQuoteList();
+        break;
+      case 'clean_analysis_folder':
+        result = cleanAnalysisFolder();
         break;
       case 'get_check_quote':
         result = getCheckQuote(e.parameter.projNo);
