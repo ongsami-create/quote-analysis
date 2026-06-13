@@ -646,6 +646,12 @@
 </head>
 <body>
     <div id="app">
+        <!-- DEBUG: runtime error overlay — visible only when window.__lastError is set -->
+        <div v-if="lastError" style="position:fixed;top:0;left:0;right:0;background:#b00020;color:#fff;padding:14px 18px;font-family:monospace;font-size:13px;z-index:99999;white-space:pre-wrap;max-height:60vh;overflow:auto;border-bottom:3px solid #fff;">
+            <b>JS ERROR:</b> {{ lastError.message }}
+            <span style="float:right;cursor:pointer;background:#fff;color:#b00020;padding:2px 10px;border-radius:4px;" @click="lastError = null">关闭</span>
+            <div style="margin-top:8px;font-size:11px;opacity:0.9;">{{ lastError.stack }}</div>
+        </div>
         <!-- Loading -->
         <div v-if="isLoading" class="loading-overlay">
             <div class="loading-content">
@@ -1422,6 +1428,16 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 const filterStatus = ref('');
                 const statusText = { pending: '进行中', completed: '已完成', warning: '预警' };
 
+                // DEBUG: surface uncaught errors as an in-page overlay
+                const lastError = ref(null);
+                window.addEventListener('error', (e) => {
+                    lastError.value = { message: e.message, stack: (e.error && e.error.stack) || '' };
+                });
+                window.addEventListener('unhandledrejection', (e) => {
+                    const r = e.reason || {};
+                    lastError.value = { message: r.message || String(r), stack: r.stack || '' };
+                });
+
                 // Edit Dialog
                 const editDialogVisible = ref(false);
                 const editData = ref(null);
@@ -1916,7 +1932,7 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 }, 30000);
 
                 return {
-                    isLoading, loadingText, isConnected, isOnline, syncQueueCount, listData, searchQuery, filterStatus, statusText,
+                    isLoading, loadingText, isConnected, isOnline, syncQueueCount, listData, searchQuery, filterStatus, statusText, lastError,
                     importDialogVisible, importForm, availableFiles, availableFolders, importLoading, editDialogVisible, editData, sections,
                     filteredList, summary, isAlreadyImported,
                     actualCostTotal, designFeeTotal, installFeeTotal, logisticsFeeTotal, commissionTotal, lossTotal, totalCost, netProfit, netProfitPercent,
