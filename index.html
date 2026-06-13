@@ -1301,13 +1301,26 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
 
         async function saveToLocal(quotes) {
             if (!db) return;
-            const tx = db.transaction('quotes', 'readwrite');
-            const store = tx.objectStore('quotes');
-            await store.clear();
-            for (const quote of quotes) {
-                // Strip non-clonable fields and deep-clone to plain objects before storing
-                const { _rawData, ...clean } = quote;
-                store.put(JSON.parse(JSON.stringify(clean)));
+            try {
+                const tx = db.transaction('quotes', 'readwrite');
+                const store = tx.objectStore('quotes');
+                await store.clear();
+                for (const quote of quotes) {
+                    if (!quote || !quote.projNo) {
+                        console.warn('[saveToLocal] skipping item without projNo:', quote);
+                        continue;
+                    }
+                    // Strip non-clonable fields and deep-clone to plain objects before storing
+                    const { _rawData, ...clean } = quote;
+                    store.put(JSON.parse(JSON.stringify(clean)));
+                }
+                await new Promise((resolve, reject) => {
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                    tx.onabort = () => reject(tx.error);
+                });
+            } catch (e) {
+                console.error('[saveToLocal] failed:', e);
             }
         }
 
@@ -1323,9 +1336,22 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
 
         async function saveQuoteToLocal(quote) {
             if (!db) return;
-            const tx = db.transaction('quotes', 'readwrite');
-            const { _rawData, ...clean } = quote;
-            tx.objectStore('quotes').put(JSON.parse(JSON.stringify(clean)));
+            if (!quote || !quote.projNo) {
+                console.warn('[saveQuoteToLocal] skipping item without projNo:', quote);
+                return;
+            }
+            try {
+                const tx = db.transaction('quotes', 'readwrite');
+                const { _rawData, ...clean } = quote;
+                tx.objectStore('quotes').put(JSON.parse(JSON.stringify(clean)));
+                await new Promise((resolve, reject) => {
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                    tx.onabort = () => reject(tx.error);
+                });
+            } catch (e) {
+                console.error('[saveQuoteToLocal] failed:', e);
+            }
         }
 
         async function deleteQuoteFromLocal(projNo) {
