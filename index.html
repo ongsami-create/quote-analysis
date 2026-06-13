@@ -213,6 +213,16 @@
         .status-completed { background: #e8f8ec; color: #27ae60; }
         .status-warning { background: #fef3e2; color: #f39c12; }
 
+        /* Sync Badge (cloud vs local-only) */
+        .sync-badge {
+            display: inline-block;
+            font-size: 16px;
+            line-height: 1;
+            cursor: help;
+        }
+        .sync-cloud { color: #27ae60; }
+        .sync-local { color: #e67e22; }
+
         .warning-badge {
             background: var(--warning);
             color: white;
@@ -722,6 +732,7 @@
                     <thead>
                         <tr>
                             <th>ProjNo</th>
+                            <th>同步</th>
                             <th>客户</th>
                             <th class="text-right">总销售</th>
                             <th class="text-right">总成本</th>
@@ -735,6 +746,10 @@
                     <tbody>
                         <tr v-for="item in filteredList" :key="item.projNo" :class="{ 'warning-row': item.profitPercent < 25 }">
                             <td><span class="link" @click="openEdit(item)">{{ item.projNo }}</span></td>
+                            <td>
+                                <span v-if="item._sourceFileId" class="sync-badge sync-cloud" title="有原始文件 ID，可写回云端">☁️</span>
+                                <span v-else class="sync-badge sync-local" title="无原始文件 ID，仅本地存储；重新导入一次以启用云端同步">⚠️</span>
+                            </td>
                             <td>{{ item.customerName }}</td>
                             <td class="text-right">RM {{ formatNumber(item.totalSales) }}</td>
                             <td class="text-right">RM {{ formatNumber(item.totalCost) }}</td>
