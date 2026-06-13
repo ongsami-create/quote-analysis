@@ -1835,6 +1835,19 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     editObj._rawData = raw;
                     editObj._sourceFileId = local._sourceFileId;
                     editData.value = JSON.parse(JSON.stringify(editObj));
+
+                    // Auto-expand sections based on existing data
+                    // (sections.X = false means expanded; = true means collapsed)
+                    sections.customer = false;       // always expand
+                    sections.salesPerson = false;    // always expand
+                    sections.items = false;          // always expand
+                    sections.commission = false;     // always expand
+                    sections.actualCost = !(editData.value.actualCost?.entries?.length > 0);
+                    sections.designFee = !(editData.value.designFee?.entries?.length > 0);
+                    sections.installFee = !(editData.value.installFee?.entries?.length > 0);
+                    sections.logisticsFee = !(editData.value.logisticsFee?.entries?.length > 0);
+                    sections.loss = !(editData.value.loss?.entries?.length > 0);
+
                     editDialogVisible.value = true;
                 };
 
