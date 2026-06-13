@@ -1822,17 +1822,45 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                         return;
                     }
 
-                    // Rebuild editData from raw so we always start from the latest raw file
-                    const raw = local._rawData;
-                    const editObj = buildNewDataFromRaw(raw, row.projNo, local._sourceFileId);
-
-                    // Overlay previous analysis if _rawData._analysis exists (so edits persist across reopens)
-                    if (raw && raw._analysis && typeof raw._analysis === 'object') {
-                        Object.assign(editObj, raw._analysis);
+                    // Defensive: older IndexedDB entries (saved before _rawData was kept) won't have it.
+                    // In that case, rebuild a minimal editData from the stored edit fields directly.
+                    let raw = local._rawData;
+                    let editObj;
+                    if (raw && typeof raw === 'object') {
+                        editObj = buildNewDataFromRaw(raw, row.projNo, local._sourceFileId);
+                        // Overlay previous analysis if raw._analysis exists
+                        if (raw._analysis && typeof raw._analysis === 'object') {
+                            Object.assign(editObj, raw._analysis);
+                        }
+                    } else {
+                        // Fallback: legacy data without _rawData — use the stored edit fields as-is
+                        console.warn('[openEdit] local entry missing _rawData, using legacy fields for', row.projNo);
+                        editObj = {
+                            projNo: local.projNo || row.projNo,
+                            customerName: local.customerName || row.projNo,
+                            totalSales: local.totalSales || 0,
+                            totalCost: local.totalCost || 0,
+                            profit: local.profit || 0,
+                            profitPercent: local.profitPercent || 0,
+                            debtPercent: local.debtPercent || 0,
+                            status: local.status || 'pending',
+                            lastModified: local.lastModified || new Date().toISOString().split('T')[0],
+                            customer: local.customer || { date: '', name: '', ic: '', phone: '', address: '' },
+                            salesPerson: local.salesPerson || { projNo: row.projNo, name: '', phone: '', subSales: '', measurer: '', designer: '' },
+                            items: local.items || [],
+                            summary: local.summary || { totalSales: local.totalSales || 0, estimatedCost: 0, estimatedDesignFee: 0, estimatedInstallFee: 0, discount: 0 },
+                            actualCost: local.actualCost || { entries: [] },
+                            designFee: local.designFee || { entries: [] },
+                            installFee: local.installFee || { entries: [] },
+                            logisticsFee: local.logisticsFee || { entries: [] },
+                            commission: local.commission || { sales: { percent: 0, amount: 0 }, subSales: { percent: 0, amount: 0 }, measurer: { percent: 0, amount: 0 }, designer: { percent: 0, amount: 0 }, manager: { percent: 0, amount: 0 } },
+                            loss: local.loss || { entries: [] },
+                            _rawData: null,
+                            _sourceFileId: local._sourceFileId || null
+                        };
                     }
 
-                    // Keep _rawData on editData so saveProject can write back
-                    editObj._rawData = raw;
+                    editObj._rawData = raw || null;
                     editObj._sourceFileId = local._sourceFileId;
                     editData.value = JSON.parse(JSON.stringify(editObj));
 
