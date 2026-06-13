@@ -646,12 +646,6 @@
 </head>
 <body>
     <div id="app">
-        <!-- DEBUG: runtime error overlay — visible only when window.__lastError is set -->
-        <div v-if="lastError" style="position:fixed;top:0;left:0;right:0;background:#b00020;color:#fff;padding:14px 18px;font-family:monospace;font-size:13px;z-index:99999;white-space:pre-wrap;max-height:60vh;overflow:auto;border-bottom:3px solid #fff;">
-            <b>JS ERROR:</b> {{ lastError.message }}
-            <span style="float:right;cursor:pointer;background:#fff;color:#b00020;padding:2px 10px;border-radius:4px;" @click="lastError = null">关闭</span>
-            <div style="margin-top:8px;font-size:11px;opacity:0.9;">{{ lastError.stack }}</div>
-        </div>
         <!-- Loading -->
         <div v-if="isLoading" class="loading-overlay">
             <div class="loading-content">
@@ -699,9 +693,6 @@
                 </div>
                 <button class="btn btn-secondary" @click="syncFromCloud">
                     🔄 同步云端
-                </button>
-                <button class="btn btn-secondary" @click="cleanAnalysisFolder" style="background:#c62828;color:#fff;" title="清空 squirrel analysis/ 下的所有 check_*.json（一次性调试按钮）">
-                    🧹 清理脏数据
                 </button>
             </div>
 
@@ -1313,9 +1304,8 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                         console.warn('[saveToLocal] skipping item without projNo:', quote);
                         continue;
                     }
-                    // Strip non-clonable fields and deep-clone to plain objects before storing
-                    const { _rawData, ...clean } = quote;
-                    store.put(JSON.parse(JSON.stringify(clean)));
+                    // Keep _rawData so openEdit can write back to the original JSON
+                    store.put(JSON.parse(JSON.stringify(quote)));
                 }
                 await new Promise((resolve, reject) => {
                     tx.oncomplete = () => resolve();
@@ -1345,8 +1335,8 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
             }
             try {
                 const tx = db.transaction('quotes', 'readwrite');
-                const { _rawData, ...clean } = quote;
-                tx.objectStore('quotes').put(JSON.parse(JSON.stringify(clean)));
+                // Keep _rawData so openEdit can write back to the original JSON
+                tx.objectStore('quotes').put(JSON.parse(JSON.stringify(quote)));
                 await new Promise((resolve, reject) => {
                     tx.oncomplete = () => resolve();
                     tx.onerror = () => reject(tx.error);
@@ -1456,16 +1446,6 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 const searchQuery = ref('');
                 const filterStatus = ref('');
                 const statusText = { pending: '进行中', completed: '已完成', warning: '预警' };
-
-                // DEBUG: surface uncaught errors as an in-page overlay
-                const lastError = ref(null);
-                window.addEventListener('error', (e) => {
-                    lastError.value = { message: e.message, stack: (e.error && e.error.stack) || '' };
-                });
-                window.addEventListener('unhandledrejection', (e) => {
-                    const r = e.reason || {};
-                    lastError.value = { message: r.message || String(r), stack: r.stack || '' };
-                });
 
                 // Edit Dialog
                 const editDialogVisible = ref(false);
@@ -1702,6 +1682,95 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     }
                 };
 
+                const buildNewDataFromRaw = (raw, projNo, sourceFileId) => {
+                    return {
+                        projNo,
+                        customerName: raw.customerName || projNo,
+                        totalSales: raw.total || raw.grandTotal || raw.totalSales || 0,
+                        totalCost: raw.totalCost || 0,
+                        profit: raw.profit || 0,
+                        profitPercent: raw.profitPercent || 0,
+                        debtPercent: raw.debtPercent || 0,
+                        status: raw.status || 'pending',
+                        lastModified: raw.lastModified || new Date().toISOString().split('T')[0],
+                        discount: raw.discount || 0,
+                        customer: {
+                            date: raw.date || '',
+                            name: raw.customerName || '',
+                            ic: raw.customerIC || '',
+                            phone: raw.customerContact || '',
+                            address: raw.customerAddress || ''
+                        },
+                        salesPerson: {
+                            projNo: raw.projNo || projNo,
+                            name: raw.salesperson || '',
+                            phone: raw.salespersonContact || '',
+                            subSales: raw.subSalesperson || '',
+                            measurer: raw.measurementEngineer || '',
+                            designer: raw.designerName || ''
+                        },
+                        items: (raw.items || []).map(item => ({
+                            area: item.area || '',
+                            product: item.itemB || item.itemBZh || '',
+                            productZh: item.itemBZh || '',
+                            description: item.description || '',
+                            noteA: item.noteA || '',
+                            noteACn: item.noteACn || '',
+                            noteB: item.noteB || '',
+                            noteBCn: item.noteBCn || '',
+                            unitPrice: item.unitPrice || 0,
+                            salePrice: item.unitPrice || 0,
+                            costPrice: item.costPrice || 0,
+                            costPrice1: item.costPrice1 || 0,
+                            algorithm: item.algorithm || '',
+                            designFee: item.designFee || 0,
+                            installFee: item.installFee || 0,
+                            w: item.w || 0,
+                            h: item.h || 0,
+                            d: item.d || 0,
+                            width: item.w || 0,
+                            height: item.h || 0,
+                            depth: item.d || 0,
+                            value: item.value || 0,
+                            qty: item.qty || 1,
+                            remarks: item.remarks || '',
+                            discount: item.discount || false,
+                            discountPercent: item.discountPercent || 0,
+                            specialCraft: item.specialCraft || false,
+                            specialCraftAmount: item.specialCraftAmount || 0,
+                            foc: item.foc || false,
+                            special: item.special || false,
+                            specialPercent: item.specialPercent || 0,
+                            adjEnabled: item.adjEnabled || false,
+                            adj: item.adj || 0,
+                            total: item.total || 0
+                        })),
+                        summary: (() => {
+                            const items = raw.items || [];
+                            const estimatedCost = items.reduce((s, item) => s + ((item.costPrice1 || 0) * (item.value || 0) * (item.qty || 1)), 0);
+                            return {
+                                totalSales: raw.total || raw.grandTotal || raw.totalSales || 0,
+                                estimatedCost,
+                                estimatedDesignFee: items.reduce((s, item) => s + ((item.designFee || 0) * (item.value || 0) * (item.qty || 1)), 0),
+                                estimatedInstallFee: items.reduce((s, item) => s + ((item.installFee || 0) * (item.value || 0) * (item.qty || 1)), 0),
+                                discount: raw.discount || 0
+                            };
+                        })(),
+                        actualCost: (raw.actualCost && Array.isArray(raw.actualCost.entries)) ? raw.actualCost : { entries: [] },
+                        designFee: (raw.designFee && Array.isArray(raw.designFee.entries)) ? raw.designFee : { entries: [] },
+                        installFee: (raw.installFee && Array.isArray(raw.installFee.entries)) ? raw.installFee : { entries: [] },
+                        logisticsFee: (raw.logisticsFee && Array.isArray(raw.logisticsFee.entries)) ? raw.logisticsFee : { entries: [] },
+                        commission: raw.commission || { sales: { percent: raw.salespersonCommissionPercent || 0, amount: raw.salespersonCommission || 0 }, subSales: { percent: raw.subSalespersonCommissionPercent || 0, amount: raw.subSalespersonCommission || 0 }, measurer: { percent: raw.measurementEngineerCommissionPercent || 0, amount: raw.measurementEngineerCommission || 0 }, designer: { percent: raw.designerCommissionPercent || 0, amount: raw.designerCommission || 0 }, manager: { percent: 0, amount: 0 } },
+                        loss: (raw.loss && Array.isArray(raw.loss.entries)) ? raw.loss : { entries: [] },
+                        fees: raw.fees || {},
+                        customFees: raw.customFees || [],
+                        depositRecords: raw.depositRecords || [],
+                        feeRemarks: raw.feeRemarks || '',
+                        _rawData: raw,
+                        _sourceFileId: sourceFileId || null
+                    };
+                };
+
                 const confirmImport = async () => {
                     if (!importForm.selectedFile) return;
                     const projNo = importForm.selectedFile.name.replace('.json', '');
@@ -1710,91 +1779,7 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                         const result = await gasCall('read_user_quote_file', { username: importForm.selectedFolder, fileId: importForm.selectedFile.id });
                         if (result.success && result.data) {
                             const raw = result.data;
-                            const newData = {
-                                projNo,
-                                customerName: raw.customerName || projNo,
-                                totalSales: raw.total || raw.grandTotal || raw.totalSales || 0,
-                                totalCost: raw.totalCost || 0,
-                                profit: raw.profit || 0,
-                                profitPercent: raw.profitPercent || 0,
-                                debtPercent: raw.debtPercent || 0,
-                                status: raw.status || 'pending',
-                                lastModified: raw.lastModified || new Date().toISOString().split('T')[0],
-                                discount: raw.discount || 0,
-                                customer: {
-                                    date: raw.date || '',
-                                    name: raw.customerName || '',
-                                    ic: raw.customerIC || '',
-                                    phone: raw.customerContact || '',
-                                    address: raw.customerAddress || ''
-                                },
-                                salesPerson: {
-                                    projNo: raw.projNo || projNo,
-                                    name: raw.salesperson || '',
-                                    phone: raw.salespersonContact || '',
-                                    subSales: raw.subSalesperson || '',
-                                    measurer: raw.measurementEngineer || '',
-                                    designer: raw.designerName || ''
-                                },
-                                items: (raw.items || []).map(item => ({
-                                    area: item.area || '',
-                                    product: item.itemB || item.itemBZh || '',
-                                    productZh: item.itemBZh || '',
-                                    description: item.description || '',
-                                    noteA: item.noteA || '',
-                                    noteACn: item.noteACn || '',
-                                    noteB: item.noteB || '',
-                                    noteBCn: item.noteBCn || '',
-                                    unitPrice: item.unitPrice || 0,
-                                    salePrice: item.unitPrice || 0,
-                                    costPrice: item.costPrice || 0,
-                                    costPrice1: item.costPrice1 || 0,
-                                    algorithm: item.algorithm || '',
-                                    designFee: item.designFee || 0,
-                                    installFee: item.installFee || 0,
-                                    w: item.w || 0,
-                                    h: item.h || 0,
-                                    d: item.d || 0,
-                                    width: item.w || 0,
-                                    height: item.h || 0,
-                                    depth: item.d || 0,
-                                    value: item.value || 0,
-                                    qty: item.qty || 1,
-                                    remarks: item.remarks || '',
-                                    discount: item.discount || false,
-                                    discountPercent: item.discountPercent || 0,
-                                    specialCraft: item.specialCraft || false,
-                                    specialCraftAmount: item.specialCraftAmount || 0,
-                                    foc: item.foc || false,
-                                    special: item.special || false,
-                                    specialPercent: item.specialPercent || 0,
-                                    adjEnabled: item.adjEnabled || false,
-                                    adj: item.adj || 0,
-                                    total: item.total || 0
-                                })),
-                                summary: (() => {
-                                    const items = raw.items || [];
-                                    const estimatedCost = items.reduce((s, item) => s + ((item.costPrice1 || 0) * (item.value || 0) * (item.qty || 1)), 0);
-                                    return {
-                                        totalSales: raw.total || raw.grandTotal || raw.totalSales || 0,
-                                        estimatedCost,
-                                        estimatedDesignFee: items.reduce((s, item) => s + ((item.designFee || 0) * (item.value || 0) * (item.qty || 1)), 0),
-                                        estimatedInstallFee: items.reduce((s, item) => s + ((item.installFee || 0) * (item.value || 0) * (item.qty || 1)), 0),
-                                        discount: raw.discount || 0
-                                    };
-                                })(),
-                                actualCost: (raw.actualCost && Array.isArray(raw.actualCost.entries)) ? raw.actualCost : { entries: [] },
-                                designFee: (raw.designFee && Array.isArray(raw.designFee.entries)) ? raw.designFee : { entries: [] },
-                                installFee: (raw.installFee && Array.isArray(raw.installFee.entries)) ? raw.installFee : { entries: [] },
-                                logisticsFee: (raw.logisticsFee && Array.isArray(raw.logisticsFee.entries)) ? raw.logisticsFee : { entries: [] },
-                                commission: raw.commission || { sales: { percent: raw.salespersonCommissionPercent || 0, amount: raw.salespersonCommission || 0 }, subSales: { percent: raw.subSalespersonCommissionPercent || 0, amount: raw.subSalespersonCommission || 0 }, measurer: { percent: raw.measurementEngineerCommissionPercent || 0, amount: raw.measurementEngineerCommission || 0 }, designer: { percent: raw.designerCommissionPercent || 0, amount: raw.designerCommission || 0 }, manager: { percent: 0, amount: 0 } },
-                                loss: (raw.loss && Array.isArray(raw.loss.entries)) ? raw.loss : { entries: [] },
-                                fees: raw.fees || {},
-                                customFees: raw.customFees || [],
-                                depositRecords: raw.depositRecords || [],
-                                feeRemarks: raw.feeRemarks || '',
-                                _rawData: raw
-                            };
+                            const newData = buildNewDataFromRaw(raw, projNo, importForm.selectedFile.id);
                             const exists = listData.value.findIndex(item => item.projNo === projNo);
                             if (exists >= 0 && !importForm.overwrite) {
                                 alert('该报价已存在，请选择覆盖或取消');
@@ -1824,45 +1809,33 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 };
 
                 const openEdit = async (row) => {
-                    // Step 1: Try local first (faster + works offline).
-                    // Local IndexedDB stores the FULL quote (customer/items/actualCost/...).
-                    let full = null;
+                    // Read from local IndexedDB — it has the full structure including _rawData
+                    let local = null;
                     try {
-                        full = await getQuoteFromLocal(row.projNo);
+                        local = await getQuoteFromLocal(row.projNo);
                     } catch (e) {
                         console.warn('[openEdit] local read failed:', e);
                     }
 
-                    // Step 2: If local has the full structure, use it.
-                    // Otherwise fetch from cloud (cloud list endpoint returns summary only).
-                    if (full && full.customer && full.items) {
-                        editData.value = JSON.parse(JSON.stringify(full));
-                        editDialogVisible.value = true;
+                    if (!local) {
+                        alert('本地没有该报价的数据，请先导入');
                         return;
                     }
 
-                    if (!navigator.onLine) {
-                        alert('离线且本地没有该报价的完整数据，无法编辑');
-                        return;
+                    // Rebuild editData from raw so we always start from the latest raw file
+                    const raw = local._rawData;
+                    const editObj = buildNewDataFromRaw(raw, row.projNo, local._sourceFileId);
+
+                    // Overlay previous analysis if _rawData._analysis exists (so edits persist across reopens)
+                    if (raw && raw._analysis && typeof raw._analysis === 'object') {
+                        Object.assign(editObj, raw._analysis);
                     }
 
-                    try {
-                        isLoading.value = true;
-                        loadingText.value = '正在加载报价详情...';
-                        const result = await gasCall('get_check_quote', { projNo: row.projNo });
-                        if (result.success && result.quote) {
-                            editData.value = JSON.parse(JSON.stringify(result.quote));
-                            // Cache the full version locally for next time / offline
-                            await saveQuoteToLocal(editData.value);
-                            editDialogVisible.value = true;
-                        } else {
-                            alert('加载报价详情失败：' + (result.message || '未知错误'));
-                        }
-                    } catch (e) {
-                        alert('加载报价详情失败：' + e.message);
-                    } finally {
-                        isLoading.value = false;
-                    }
+                    // Keep _rawData on editData so saveProject can write back
+                    editObj._rawData = raw;
+                    editObj._sourceFileId = local._sourceFileId;
+                    editData.value = JSON.parse(JSON.stringify(editObj));
+                    editDialogVisible.value = true;
                 };
 
                 const updateCommission = (role) => {
@@ -1870,34 +1843,21 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     editData.value.commission[role].amount = editData.value.summary.totalSales * editData.value.commission[role].percent / 100;
                 };
 
-                const cleanAnalysisFolder = async () => {
-                    if (!confirm('确定要清空 squirrel analysis/ 下所有 check_*.json 吗？\n\n这是调试用按钮，会清掉所有已保存的报价分析。')) return;
-                    if (!navigator.onLine) {
-                        alert('需要联网才能清理云端数据');
-                        return;
-                    }
-                    isLoading.value = true;
-                    loadingText.value = '正在清理云端脏数据...';
-                    try {
-                        const result = await gasCall('clean_analysis_folder');
-                        if (result.success) {
-                            alert('清理成功：' + result.message + '\n已清掉的文件：\n' + (result.removed || []).join('\n'));
-                            // 重新同步云端（应该是空列表了）
-                            await syncFromCloud();
-                        } else {
-                            alert('清理失败：' + (result.message || '未知错误'));
-                        }
-                    } catch (e) {
-                        alert('清理失败：' + e.message);
-                    } finally {
-                        isLoading.value = false;
-                    }
-                };
-
                 const markComplete = async (row) => {
                     row.status = row.status === 'completed' ? 'pending' : 'completed';
                     await saveToLocal(listData.value);
                     await saveQuoteToLocal(row);
+                    // Sync completion state to squirrel analysis/ cloud folder
+                    if (navigator.onLine) {
+                        try {
+                            await gasCall('save_check_quote', {
+                                projNo: row.projNo,
+                                quoteData: row
+                            }, 'POST');
+                        } catch (e) {
+                            console.warn('[markComplete] cloud sync failed:', e);
+                        }
+                    }
                 };
 
                 const deleteProject = async (row) => {
@@ -1919,19 +1879,32 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     }
                     await saveToLocal(listData.value);
                     await saveQuoteToLocal(editData.value);
+
+                    // Write back to the ORIGINAL Squirrel JSON with _analysis field injected
+                    const fileId = editData.value._sourceFileId;
+                    if (!fileId) {
+                        // No original fileId — fall back to old behavior
+                        alert('未找到原始文件 ID，请重新导入该报价');
+                        editDialogVisible.value = false;
+                        return;
+                    }
+
                     if (!navigator.onLine) {
                         await addToSyncQueue('save', editData.value.projNo, editData.value);
                         syncQueueCount.value = await getSyncQueueCount();
-                        alert('已保存到本地，网络恢复后将自动同步');
+                        alert('已保存到本地，网络恢复后将自动同步到原文件');
                     } else {
-                        // Try to save to GAS
                         try {
-                            const result = await gasCall('save_check_quote', {
-                                projNo: editData.value.projNo,
-                                quoteData: editData.value
+                            // Strip _rawData and _sourceFileId before sending; keep _analysis
+                            const { _rawData, _sourceFileId, ...analysisPayload } = JSON.parse(JSON.stringify(editData.value));
+                            // Defensive: make sure _analysis is at top level of analysisPayload for GAS
+                            // analysisPayload already includes all editData fields including _analysis if set
+                            const result = await gasCall('write_user_quote_file', {
+                                fileId: fileId,
+                                data: analysisPayload
                             }, 'POST');
                             if (result.success) {
-                                alert('保存成功！已同步到云端');
+                                alert('保存成功！已写回原文件');
                             } else {
                                 alert('云端保存失败：' + (result.message || '未知错误'));
                             }
@@ -1985,11 +1958,11 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 }, 30000);
 
                 return {
-                    isLoading, loadingText, isConnected, isOnline, syncQueueCount, listData, searchQuery, filterStatus, statusText, lastError,
+                    isLoading, loadingText, isConnected, isOnline, syncQueueCount, listData, searchQuery, filterStatus, statusText,
                     importDialogVisible, importForm, availableFiles, availableFolders, importLoading, editDialogVisible, editData, sections,
                     filteredList, summary, isAlreadyImported,
                     actualCostTotal, designFeeTotal, installFeeTotal, logisticsFeeTotal, commissionTotal, lossTotal, totalCost, netProfit, netProfitPercent,
-                    formatNumber, filterData, syncFromCloud, cleanAnalysisFolder, showImportDialog, selectImportFile, confirmImport, showExportDialog, openEdit, updateCommission, markComplete, deleteProject, saveProject,
+                    formatNumber, filterData, syncFromCloud, showImportDialog, selectImportFile, confirmImport, showExportDialog, openEdit, updateCommission, markComplete, deleteProject, saveProject,
                     addCostEntry, removeCostEntry, addDesignEntry, removeDesignEntry, addInstallEntry, removeInstallEntry, addLogisticsEntry, removeLogisticsEntry, addLossEntry, removeLossEntry, logout
                 };
             }

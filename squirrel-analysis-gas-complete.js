@@ -1070,6 +1070,39 @@ function readUserQuoteFileByName(username, fileName) {
 }
 
 /**
+ * 写回用户的原始报价 JSON，把 data._analysis 注入到原 JSON 顶层
+ * 原 JSON 的所有字段保留，_analysis 字段会被覆盖
+ * action: write_user_quote_file
+ * @param fileId - Drive 文件 ID
+ * @param data - 包含 _analysis 字段的对象
+ */
+function writeUserQuoteFile(fileId, data) {
+  try {
+    const file = DriveApp.getFileById(fileId);
+    const original = JSON.parse(file.getBlob().getDataAsString());
+    // Defensive: data might be a string (double-encoded from frontend)
+    let payload = data;
+    if (typeof payload === 'string') {
+      try { payload = JSON.parse(payload); } catch (e) { /* keep as-is */ }
+    }
+    if (!payload || typeof payload !== 'object') {
+      return { success: false, message: 'Invalid data payload' };
+    }
+    const { _analysis, ...rest } = payload;
+    const merged = Object.assign({}, original, rest);
+    if (_analysis && typeof _analysis === 'object') {
+      merged._analysis = _analysis;
+    } else {
+      delete merged._analysis;
+    }
+    file.setContent(JSON.stringify(merged, null, 2));
+    return { success: true, message: 'Wrote back to original JSON', fileId, fileName: file.getName() };
+  } catch (error) {
+    return { success: false, message: error.toString() };
+  }
+}
+
+/**
  * 保存报价分析数据到 squirrel analysis/ 文件夹
  * action: save_check_quote
  * @param projNo - 项目编号 (如 test00)
@@ -1356,6 +1389,17 @@ function doGet(e) {
         break;
       case 'read_user_quote_file_by_name':
         result = readUserQuoteFileByName(e.parameter.username, e.parameter.fileName);
+        break;
+      case 'write_user_quote_file':
+        // POST: data from body; GET: data from e.parameter
+        let writeData = e.parameter.data;
+        if (e.postData && e.postData.contents) {
+          try {
+            const payload = JSON.parse(e.postData.contents);
+            if (payload && payload.data !== undefined) writeData = payload.data;
+          } catch (e) { /* keep param data */ }
+        }
+        result = writeUserQuoteFile(e.parameter.fileId, writeData);
         break;
       case 'save_check_quote':
         result = saveCheckQuote(e.parameter.projNo, JSON.parse(e.parameter.quoteData || '{}'));
