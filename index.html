@@ -1841,7 +1841,11 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     sections.customer = false;       // always expand
                     sections.salesPerson = false;    // always expand
                     sections.items = false;          // always expand
-                    sections.commission = false;     // always expand
+                    // Commission: expand if any role has percent > 0
+                    const c = editData.value.commission || {};
+                    const hasCommission = ['sales', 'subSales', 'measurer', 'designer', 'manager']
+                        .some(role => (c[role]?.percent || 0) > 0);
+                    sections.commission = !hasCommission;
                     sections.actualCost = !(editData.value.actualCost?.entries?.length > 0);
                     sections.designFee = !(editData.value.designFee?.entries?.length > 0);
                     sections.installFee = !(editData.value.installFee?.entries?.length > 0);
