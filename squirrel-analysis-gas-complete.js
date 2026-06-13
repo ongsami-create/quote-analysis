@@ -1098,7 +1098,7 @@ function writeUserQuoteFile(fileId, data) {
     file.setContent(JSON.stringify(merged, null, 2));
     return { success: true, message: 'Wrote back to original JSON', fileId, fileName: file.getName() };
   } catch (error) {
-    return { success: false, message: error.toString() };
+    return { success: false, message: 'writeUserQuoteFile: ' + error.toString() };
   }
 }
 
@@ -1462,6 +1462,11 @@ function doPost(e) {
       case 'save_check_quote':
         // POST 方式：projNo 和 quoteData 从 body 取
         result = saveCheckQuote(payload.projNo, payload.quoteData || {});
+        break;
+      case 'write_user_quote_file':
+        // POST 方式：fileId 和 data 从 body 取
+        // GAS e.parameter 在中转时会丢对象值，所以直接在 doPost 里处理
+        result = writeUserQuoteFile(payload.fileId, payload.data);
         break;
       case 'ping':
         result = { success: true, message: 'API is running (POST)', timestamp: new Date().toISOString() };

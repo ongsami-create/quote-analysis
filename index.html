@@ -1903,10 +1903,11 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                                 fileId: fileId,
                                 data: analysisPayload
                             }, 'POST');
+                            console.log('[saveProject] write_user_quote_file result:', result);
                             if (result.success) {
                                 alert('保存成功！已写回原文件');
                             } else {
-                                alert('云端保存失败：' + (result.message || '未知错误'));
+                                alert('云端保存失败：' + (result.message || '未知错误（看 console 详细）'));
                             }
                         } catch (e) {
                             alert('已保存到本地，云端同步失败（' + e.message + '）');
