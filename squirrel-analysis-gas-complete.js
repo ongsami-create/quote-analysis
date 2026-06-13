@@ -1070,35 +1070,40 @@ function readUserQuoteFileByName(username, fileName) {
 }
 
 /**
- * 写回用户的原始报价 JSON，把 data._analysis 注入到原 JSON 顶层
- * 原 JSON 的所有字段保留，_analysis 字段会被覆盖
- * action: write_user_quote_file
- * @param fileId - Drive 文件 ID
- * @param data - 包含 _analysis 字段的对象
+ * 导入报价：把原 JSON 完整拷贝到 squirrel analysis/ 作为 check_{projNo}.json
+ * 不修改原文件，不污染 Squirrel Designer 数据
+ * action: import_quote_to_analysis
+ * @param username - 用户文件夹名（用于查找原文件）
+ * @param fileId - 原 JSON 的 Drive 文件 ID
  */
-function writeUserQuoteFile(fileId, data) {
+function importQuoteToAnalysis(username, fileId) {
   try {
+    initializeFolders();
     const file = DriveApp.getFileById(fileId);
-    const original = JSON.parse(file.getBlob().getDataAsString());
-    // Defensive: data might be a string (double-encoded from frontend)
-    let payload = data;
-    if (typeof payload === 'string') {
-      try { payload = JSON.parse(payload); } catch (e) { /* keep as-is */ }
+    const fileName = file.getName();
+    if (!fileName.endsWith('.json')) {
+      return { success: false, message: 'Not a JSON file' };
     }
-    if (!payload || typeof payload !== 'object') {
-      return { success: false, message: 'Invalid data payload' };
+    const projNo = fileName.replace('.json', '');
+    const raw = JSON.parse(file.getBlob().getDataAsString());
+
+    // Add metadata fields (these are the only additions — original fields untouched)
+    raw.projNo = projNo;
+    raw.lastModified = new Date().toISOString().split('T')[0];
+    raw.status = raw.status || 'pending';
+
+    // Save as check_{projNo}.json in squirrel analysis/
+    const checkFileName = 'check_' + projNo + '.json';
+    const existing = analysisFolder.getFilesByName(checkFileName);
+    while (existing.hasNext()) {
+      existing.next().setTrashed(true);
     }
-    const { _analysis, ...rest } = payload;
-    const merged = Object.assign({}, original, rest);
-    if (_analysis && typeof _analysis === 'object') {
-      merged._analysis = _analysis;
-    } else {
-      delete merged._analysis;
-    }
-    file.setContent(JSON.stringify(merged, null, 2));
-    return { success: true, message: 'Wrote back to original JSON', fileId, fileName: file.getName() };
+    analysisFolder.createFile(checkFileName, JSON.stringify(raw, null, 2), 'application/json');
+
+    logActivity('system', 'import_quote_to_analysis', projNo, 'Imported from ' + username + '/' + fileName);
+    return { success: true, message: 'Imported as ' + checkFileName, projNo, data: raw };
   } catch (error) {
-    return { success: false, message: 'writeUserQuoteFile: ' + error.toString() };
+    return { success: false, message: 'importQuoteToAnalysis: ' + error.toString() };
   }
 }
 
@@ -1390,16 +1395,8 @@ function doGet(e) {
       case 'read_user_quote_file_by_name':
         result = readUserQuoteFileByName(e.parameter.username, e.parameter.fileName);
         break;
-      case 'write_user_quote_file':
-        // POST: data from body; GET: data from e.parameter
-        let writeData = e.parameter.data;
-        if (e.postData && e.postData.contents) {
-          try {
-            const payload = JSON.parse(e.postData.contents);
-            if (payload && payload.data !== undefined) writeData = payload.data;
-          } catch (e) { /* keep param data */ }
-        }
-        result = writeUserQuoteFile(e.parameter.fileId, writeData);
+      case 'import_quote_to_analysis':
+        result = importQuoteToAnalysis(e.parameter.username, e.parameter.fileId);
         break;
       case 'save_check_quote':
         result = saveCheckQuote(e.parameter.projNo, JSON.parse(e.parameter.quoteData || '{}'));
@@ -1463,10 +1460,8 @@ function doPost(e) {
         // POST 方式：projNo 和 quoteData 从 body 取
         result = saveCheckQuote(payload.projNo, payload.quoteData || {});
         break;
-      case 'write_user_quote_file':
-        // POST 方式：fileId 和 data 从 body 取
-        // GAS e.parameter 在中转时会丢对象值，所以直接在 doPost 里处理
-        result = writeUserQuoteFile(payload.fileId, payload.data);
+      case 'import_quote_to_analysis':
+        result = importQuoteToAnalysis(payload.username, payload.fileId);
         break;
       case 'ping':
         result = { success: true, message: 'API is running (POST)', timestamp: new Date().toISOString() };

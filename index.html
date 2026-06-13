@@ -122,6 +122,8 @@
 
         .btn-primary { background: var(--secondary); color: white; }
         .btn-primary:hover { background: #2980b9; }
+        .btn-primary:disabled { background: #bdc3c7; cursor: not-allowed; }
+        .btn-primary:disabled:hover { background: #bdc3c7; }
         .btn-secondary { background: #e0e0e0; color: var(--text); }
         .btn-secondary:hover { background: #d0d0d0; }
         .btn-success { background: var(--success); color: white; }
@@ -212,16 +214,6 @@
         .status-pending { background: #e8f4f8; color: #3498db; }
         .status-completed { background: #e8f8ec; color: #27ae60; }
         .status-warning { background: #fef3e2; color: #f39c12; }
-
-        /* Sync Badge (cloud vs local-only) */
-        .sync-badge {
-            display: inline-block;
-            font-size: 16px;
-            line-height: 1;
-            cursor: help;
-        }
-        .sync-cloud { color: #27ae60; }
-        .sync-local { color: #e67e22; }
 
         .warning-badge {
             background: var(--warning);
@@ -732,7 +724,6 @@
                     <thead>
                         <tr>
                             <th>ProjNo</th>
-                            <th>同步</th>
                             <th>客户</th>
                             <th class="text-right">总销售</th>
                             <th class="text-right">总成本</th>
@@ -746,10 +737,6 @@
                     <tbody>
                         <tr v-for="item in filteredList" :key="item.projNo" :class="{ 'warning-row': item.profitPercent < 25 }">
                             <td><span class="link" @click="openEdit(item)">{{ item.projNo }}</span></td>
-                            <td>
-                                <span v-if="item._sourceFileId" class="sync-badge sync-cloud" title="有原始文件 ID，可写回云端">☁️</span>
-                                <span v-else class="sync-badge sync-local" title="无原始文件 ID，仅本地存储；重新导入一次以启用云端同步">⚠️</span>
-                            </td>
                             <td>{{ item.customerName }}</td>
                             <td class="text-right">RM {{ formatNumber(item.totalSales) }}</td>
                             <td class="text-right">RM {{ formatNumber(item.totalCost) }}</td>
@@ -980,11 +967,11 @@
                                 <tbody>
                                     <tr v-for="(item, index) in editData.items" :key="index">
                                         <td>{{ item.area }}</td>
-                                        <td>{{ item.product }}<br><small style="color:#888">{{ item.productZh }}</small></td>
-                                        <td>{{ (item.width || 0).toFixed(2) }}×{{ (item.height || 0).toFixed(2) }}×{{ (item.depth || 0).toFixed(2) }}</td>
+                                        <td>{{ item.itemB }}<br><small style="color:#888">{{ item.itemBZh }}</small></td>
+                                        <td>{{ (item.w || 0).toFixed(2) }}×{{ (item.h || 0).toFixed(2) }}×{{ (item.d || 0).toFixed(2) }}</td>
                                         <td>{{ (item.qty || 0).toFixed(2) }}</td>
                                         <td>{{ (item.value || 0).toFixed(2) }}</td>
-                                        <td>RM {{ formatNumber(item.salePrice) }}</td>
+                                        <td>RM {{ formatNumber(item.unitPrice) }}</td>
                                         <td>RM {{ formatNumber(item.total) }}</td>
                                         <td>RM {{ formatNumber(item.costPrice1) }}</td>
                                         <td>RM {{ formatNumber((item.costPrice1 || 0) * (item.value || 0) * (item.qty || 1)) }}</td>
@@ -1045,7 +1032,7 @@
                         </div>
                         <div class="section-content">
                             <div class="form-group" style="margin-bottom: 8px; font-size: 12px; color: #555;">
-                                <span>{{ editData.items.map(i => (i.productZh || i.product) + ': ' + (i.designFee || 0) + '×' + (i.value || 0) + '×' + (i.qty || 1) + '=RM' + formatNumber((i.designFee || 0) * (i.value || 0) * (i.qty || 1))).join(' + ') + ' = RM ' + formatNumber(editData.items.reduce((s, i) => s + ((i.designFee || 0) * (i.value || 0) * (i.qty || 1)), 0)) }}</span>
+                                <span>{{ editData.items.map(i => (i.itemBZh || i.itemB || '') + ': ' + (i.designFee || 0) + '×' + (i.value || 0) + '×' + (i.qty || 1) + '=RM' + formatNumber((i.designFee || 0) * (i.value || 0) * (i.qty || 1))).join(' + ') + ' = RM ' + formatNumber(editData.items.reduce((s, i) => s + ((i.designFee || 0) * (i.value || 0) * (i.qty || 1)), 0)) }}</span>
                             </div>
                             <div class="form-group" style="margin-bottom: 16px;">
                                 <label class="form-label">预估设计费 (来自报价明细)</label>
@@ -1080,7 +1067,7 @@
                         </div>
                         <div class="section-content">
                             <div class="form-group" style="margin-bottom: 8px; font-size: 12px; color: #555;">
-                                <span>{{ editData.items.map(i => (i.productZh || i.product) + ': ' + (i.installFee || 0) + '×' + (i.value || 0) + '×' + (i.qty || 1) + '=RM' + formatNumber((i.installFee || 0) * (i.value || 0) * (i.qty || 1))).join(' + ') + ' = RM ' + formatNumber(editData.items.reduce((s, i) => s + ((i.installFee || 0) * (i.value || 0) * (i.qty || 1)), 0)) }}</span>
+                                <span>{{ editData.items.map(i => (i.itemBZh || i.itemB || '') + ': ' + (i.installFee || 0) + '×' + (i.value || 0) + '×' + (i.qty || 1) + '=RM' + formatNumber((i.installFee || 0) * (i.value || 0) * (i.qty || 1))).join(' + ') + ' = RM ' + formatNumber(editData.items.reduce((s, i) => s + ((i.installFee || 0) * (i.value || 0) * (i.qty || 1)), 0)) }}</span>
                             </div>
                             <div class="form-group" style="margin-bottom: 16px;">
                                 <label class="form-label">预估安装费 (来自报价明细)</label>
@@ -1260,7 +1247,7 @@
                 </div>
                 <div class="modal-footer">
                     <button class="btn btn-secondary" @click="editDialogVisible = false">取消</button>
-                    <button class="btn btn-primary" @click="saveProject">保存</button>
+                    <button class="btn btn-primary" :disabled="!isOnline" :title="!isOnline ? '离线模式：编辑只读，请联网后保存' : ''" @click="saveProject">保存</button>
                 </div>
             </div>
         </div>
@@ -1319,7 +1306,6 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                         console.warn('[saveToLocal] skipping item without projNo:', quote);
                         continue;
                     }
-                    // Keep _rawData so openEdit can write back to the original JSON
                     store.put(JSON.parse(JSON.stringify(quote)));
                 }
                 await new Promise((resolve, reject) => {
@@ -1350,7 +1336,6 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
             }
             try {
                 const tx = db.transaction('quotes', 'readwrite');
-                // Keep _rawData so openEdit can write back to the original JSON
                 tx.objectStore('quotes').put(JSON.parse(JSON.stringify(quote)));
                 await new Promise((resolve, reject) => {
                     tx.oncomplete = () => resolve();
@@ -1697,8 +1682,45 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     }
                 };
 
-                const buildNewDataFromRaw = (raw, projNo, sourceFileId) => {
+                // Build a complete editData object from raw Squirrel JSON.
+                // Both template-friendly fields (customer/salesPerson/...) and
+                // raw fields (customerName/items/...) are populated.
+                const buildNewDataFromRaw = (raw, projNo) => {
+                    const items = (raw.items || []).map(item => ({
+                        area: item.area || '',
+                        itemB: item.itemB || '',
+                        itemBZh: item.itemBZh || '',
+                        description: item.description || '',
+                        noteA: item.noteA || '',
+                        noteACn: item.noteACn || '',
+                        noteB: item.noteB || '',
+                        noteBCn: item.noteBCn || '',
+                        unitPrice: item.unitPrice || 0,
+                        costPrice: item.costPrice || 0,
+                        costPrice1: item.costPrice1 || 0,
+                        algorithm: item.algorithm || '',
+                        designFee: item.designFee || 0,
+                        installFee: item.installFee || 0,
+                        w: item.w || 0,
+                        h: item.h || 0,
+                        d: item.d || 0,
+                        value: item.value || 0,
+                        qty: item.qty || 1,
+                        remarks: item.remarks || '',
+                        discount: item.discount || false,
+                        discountPercent: item.discountPercent || 0,
+                        specialCraft: item.specialCraft || false,
+                        specialCraftAmount: item.specialCraftAmount || 0,
+                        foc: item.foc || false,
+                        special: item.special || false,
+                        specialPercent: item.specialPercent || 0,
+                        adjEnabled: item.adjEnabled || false,
+                        adj: item.adj || 0,
+                        total: item.total || 0
+                    }));
+                    const estimatedCost = items.reduce((s, item) => s + ((item.costPrice1 || 0) * (item.value || 0) * (item.qty || 1)), 0);
                     return {
+                        // Top-level summary
                         projNo,
                         customerName: raw.customerName || projNo,
                         totalSales: raw.total || raw.grandTotal || raw.totalSales || 0,
@@ -1709,6 +1731,7 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                         status: raw.status || 'pending',
                         lastModified: raw.lastModified || new Date().toISOString().split('T')[0],
                         discount: raw.discount || 0,
+                        // Template-friendly aliases
                         customer: {
                             date: raw.date || '',
                             name: raw.customerName || '',
@@ -1724,77 +1747,52 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                             measurer: raw.measurementEngineer || '',
                             designer: raw.designerName || ''
                         },
-                        items: (raw.items || []).map(item => ({
-                            area: item.area || '',
-                            product: item.itemB || item.itemBZh || '',
-                            productZh: item.itemBZh || '',
-                            description: item.description || '',
-                            noteA: item.noteA || '',
-                            noteACn: item.noteACn || '',
-                            noteB: item.noteB || '',
-                            noteBCn: item.noteBCn || '',
-                            unitPrice: item.unitPrice || 0,
-                            salePrice: item.unitPrice || 0,
-                            costPrice: item.costPrice || 0,
-                            costPrice1: item.costPrice1 || 0,
-                            algorithm: item.algorithm || '',
-                            designFee: item.designFee || 0,
-                            installFee: item.installFee || 0,
-                            w: item.w || 0,
-                            h: item.h || 0,
-                            d: item.d || 0,
-                            width: item.w || 0,
-                            height: item.h || 0,
-                            depth: item.d || 0,
-                            value: item.value || 0,
-                            qty: item.qty || 1,
-                            remarks: item.remarks || '',
-                            discount: item.discount || false,
-                            discountPercent: item.discountPercent || 0,
-                            specialCraft: item.specialCraft || false,
-                            specialCraftAmount: item.specialCraftAmount || 0,
-                            foc: item.foc || false,
-                            special: item.special || false,
-                            specialPercent: item.specialPercent || 0,
-                            adjEnabled: item.adjEnabled || false,
-                            adj: item.adj || 0,
-                            total: item.total || 0
-                        })),
-                        summary: (() => {
-                            const items = raw.items || [];
-                            const estimatedCost = items.reduce((s, item) => s + ((item.costPrice1 || 0) * (item.value || 0) * (item.qty || 1)), 0);
-                            return {
-                                totalSales: raw.total || raw.grandTotal || raw.totalSales || 0,
-                                estimatedCost,
-                                estimatedDesignFee: items.reduce((s, item) => s + ((item.designFee || 0) * (item.value || 0) * (item.qty || 1)), 0),
-                                estimatedInstallFee: items.reduce((s, item) => s + ((item.installFee || 0) * (item.value || 0) * (item.qty || 1)), 0),
-                                discount: raw.discount || 0
-                            };
-                        })(),
+                        // Items (mapped)
+                        items,
+                        // Custom analysis fields (defaults if not present in raw)
+                        summary: {
+                            totalSales: raw.total || raw.grandTotal || raw.totalSales || 0,
+                            estimatedCost,
+                            estimatedDesignFee: items.reduce((s, item) => s + ((item.designFee || 0) * (item.value || 0) * (item.qty || 1)), 0),
+                            estimatedInstallFee: items.reduce((s, item) => s + ((item.installFee || 0) * (item.value || 0) * (item.qty || 1)), 0),
+                            discount: raw.discount || 0
+                        },
                         actualCost: (raw.actualCost && Array.isArray(raw.actualCost.entries)) ? raw.actualCost : { entries: [] },
                         designFee: (raw.designFee && Array.isArray(raw.designFee.entries)) ? raw.designFee : { entries: [] },
                         installFee: (raw.installFee && Array.isArray(raw.installFee.entries)) ? raw.installFee : { entries: [] },
                         logisticsFee: (raw.logisticsFee && Array.isArray(raw.logisticsFee.entries)) ? raw.logisticsFee : { entries: [] },
-                        commission: raw.commission || { sales: { percent: raw.salespersonCommissionPercent || 0, amount: raw.salespersonCommission || 0 }, subSales: { percent: raw.subSalespersonCommissionPercent || 0, amount: raw.subSalespersonCommission || 0 }, measurer: { percent: raw.measurementEngineerCommissionPercent || 0, amount: raw.measurementEngineerCommission || 0 }, designer: { percent: raw.designerCommissionPercent || 0, amount: raw.designerCommission || 0 }, manager: { percent: 0, amount: 0 } },
+                        commission: raw.commission || {
+                            sales: { percent: raw.salespersonCommissionPercent || 0, amount: raw.salespersonCommission || 0 },
+                            subSales: { percent: raw.subSalespersonCommissionPercent || 0, amount: raw.subSalespersonCommission || 0 },
+                            measurer: { percent: raw.measurementEngineerCommissionPercent || 0, amount: raw.measurementEngineerCommission || 0 },
+                            designer: { percent: raw.designerCommissionPercent || 0, amount: raw.designerCommission || 0 },
+                            manager: { percent: 0, amount: 0 }
+                        },
                         loss: (raw.loss && Array.isArray(raw.loss.entries)) ? raw.loss : { entries: [] },
                         fees: raw.fees || {},
                         customFees: raw.customFees || [],
                         depositRecords: raw.depositRecords || [],
-                        feeRemarks: raw.feeRemarks || '',
-                        _rawData: raw,
-                        _sourceFileId: sourceFileId || null
+                        feeRemarks: raw.feeRemarks || ''
                     };
                 };
 
                 const confirmImport = async () => {
                     if (!importForm.selectedFile) return;
                     const projNo = importForm.selectedFile.name.replace('.json', '');
+                    if (!navigator.onLine) {
+                        alert('当前离线，导入需要联网');
+                        return;
+                    }
                     isLoading.value = true;
                     try {
-                        const result = await gasCall('read_user_quote_file', { username: importForm.selectedFolder, fileId: importForm.selectedFile.id });
+                        // Import directly to cloud as check_{projNo}.json (raw file is NOT modified)
+                        const result = await gasCall('import_quote_to_analysis', {
+                            username: importForm.selectedFolder,
+                            fileId: importForm.selectedFile.id
+                        });
                         if (result.success && result.data) {
                             const raw = result.data;
-                            const newData = buildNewDataFromRaw(raw, projNo, importForm.selectedFile.id);
+                            const newData = buildNewDataFromRaw(raw, projNo);
                             const exists = listData.value.findIndex(item => item.projNo === projNo);
                             if (exists >= 0 && !importForm.overwrite) {
                                 alert('该报价已存在，请选择覆盖或取消');
@@ -1806,11 +1804,10 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                                 listData.value.push(newData);
                             }
                             await saveToLocal(listData.value);
-                            await saveQuoteToLocal(newData);
                             importDialogVisible.value = false;
-                            alert('导入成功！');
+                            alert('导入成功！已保存到云端 squirrel analysis/');
                         } else {
-                            alert('导入失败：无法读取文件数据');
+                            alert('导入失败：' + (result.message || '无法读取文件数据'));
                         }
                     } catch (e) {
                         alert('导入失败：' + e.message);
@@ -1824,67 +1821,38 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 };
 
                 const openEdit = async (row) => {
-                    // Read from local IndexedDB — it has the full structure including _rawData
-                    let local = null;
-                    try {
-                        local = await getQuoteFromLocal(row.projNo);
-                    } catch (e) {
-                        console.warn('[openEdit] local read failed:', e);
-                    }
-
-                    if (!local) {
-                        alert('本地没有该报价的数据，请先导入');
-                        return;
-                    }
-
-                    // Defensive: older IndexedDB entries (saved before _rawData was kept) won't have it.
-                    // In that case, rebuild a minimal editData from the stored edit fields directly.
-                    let raw = local._rawData;
-                    let editObj;
-                    if (raw && typeof raw === 'object') {
-                        editObj = buildNewDataFromRaw(raw, row.projNo, local._sourceFileId);
-                        // Overlay previous analysis if raw._analysis exists
-                        if (raw._analysis && typeof raw._analysis === 'object') {
-                            Object.assign(editObj, raw._analysis);
+                    // Cloud is the source of truth. Fetch the latest check_{projNo}.json
+                    if (!navigator.onLine) {
+                        // Offline: try local cache, but editing is read-only (save button disabled)
+                        const cached = await getQuoteFromLocal(row.projNo);
+                        if (!cached) {
+                            alert('离线且本地无缓存，无法编辑。请联网后重试。');
+                            return;
                         }
+                        editData.value = JSON.parse(JSON.stringify(cached));
                     } else {
-                        // Fallback: legacy data without _rawData — use the stored edit fields as-is
-                        console.warn('[openEdit] local entry missing _rawData, using legacy fields for', row.projNo);
-                        editObj = {
-                            projNo: local.projNo || row.projNo,
-                            customerName: local.customerName || row.projNo,
-                            totalSales: local.totalSales || 0,
-                            totalCost: local.totalCost || 0,
-                            profit: local.profit || 0,
-                            profitPercent: local.profitPercent || 0,
-                            debtPercent: local.debtPercent || 0,
-                            status: local.status || 'pending',
-                            lastModified: local.lastModified || new Date().toISOString().split('T')[0],
-                            customer: local.customer || { date: '', name: '', ic: '', phone: '', address: '' },
-                            salesPerson: local.salesPerson || { projNo: row.projNo, name: '', phone: '', subSales: '', measurer: '', designer: '' },
-                            items: local.items || [],
-                            summary: local.summary || { totalSales: local.totalSales || 0, estimatedCost: 0, estimatedDesignFee: 0, estimatedInstallFee: 0, discount: 0 },
-                            actualCost: local.actualCost || { entries: [] },
-                            designFee: local.designFee || { entries: [] },
-                            installFee: local.installFee || { entries: [] },
-                            logisticsFee: local.logisticsFee || { entries: [] },
-                            commission: local.commission || { sales: { percent: 0, amount: 0 }, subSales: { percent: 0, amount: 0 }, measurer: { percent: 0, amount: 0 }, designer: { percent: 0, amount: 0 }, manager: { percent: 0, amount: 0 } },
-                            loss: local.loss || { entries: [] },
-                            _rawData: null,
-                            _sourceFileId: local._sourceFileId || null
-                        };
+                        try {
+                            const result = await gasCall('get_check_quote', { projNo: row.projNo });
+                            if (result.success && result.quote) {
+                                // Build full editData from the stored check_*.json (already in raw format with custom fields)
+                                const editObj = buildNewDataFromRaw(result.quote, row.projNo);
+                                editData.value = JSON.parse(JSON.stringify(editObj));
+                                // Cache for offline read-only access
+                                await saveQuoteToLocal(editData.value);
+                            } else {
+                                alert('加载报价详情失败：' + (result.message || '未知错误'));
+                                return;
+                            }
+                        } catch (e) {
+                            alert('加载报价详情失败：' + e.message);
+                            return;
+                        }
                     }
-
-                    editObj._rawData = raw || null;
-                    editObj._sourceFileId = local._sourceFileId;
-                    editData.value = JSON.parse(JSON.stringify(editObj));
 
                     // Auto-expand sections based on existing data
-                    // (sections.X = false means expanded; = true means collapsed)
-                    sections.customer = false;       // always expand
-                    sections.salesPerson = false;    // always expand
-                    sections.items = false;          // always expand
-                    // Commission: expand if any role has percent > 0
+                    sections.customer = false;
+                    sections.salesPerson = false;
+                    sections.items = false;
                     const c = editData.value.commission || {};
                     const hasCommission = ['sales', 'subSales', 'measurer', 'designer', 'manager']
                         .some(role => (c[role]?.percent || 0) > 0);
@@ -1929,6 +1897,11 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
 
                 const saveProject = async () => {
                     if (!editData.value) return;
+                    // Offline: refuse to save (button should be disabled, but double-check)
+                    if (!navigator.onLine) {
+                        alert('当前离线，编辑为只读模式。请联网后再保存。');
+                        return;
+                    }
                     editData.value.totalCost = totalCost.value;
                     editData.value.profit = netProfit.value;
                     editData.value.profitPercent = netProfitPercent.value;
@@ -1940,38 +1913,20 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     await saveToLocal(listData.value);
                     await saveQuoteToLocal(editData.value);
 
-                    // Write back to the ORIGINAL Squirrel JSON with _analysis field injected
-                    const fileId = editData.value._sourceFileId;
-                    if (!fileId) {
-                        // No original fileId — fall back to old behavior
-                        alert('未找到原始文件 ID，请重新导入该报价');
-                        editDialogVisible.value = false;
-                        return;
-                    }
-
-                    if (!navigator.onLine) {
-                        await addToSyncQueue('save', editData.value.projNo, editData.value);
-                        syncQueueCount.value = await getSyncQueueCount();
-                        alert('已保存到本地，网络恢复后将自动同步到原文件');
-                    } else {
-                        try {
-                            // Strip _rawData and _sourceFileId before sending; keep _analysis
-                            const { _rawData, _sourceFileId, ...analysisPayload } = JSON.parse(JSON.stringify(editData.value));
-                            // Defensive: make sure _analysis is at top level of analysisPayload for GAS
-                            // analysisPayload already includes all editData fields including _analysis if set
-                            const result = await gasCall('write_user_quote_file', {
-                                fileId: fileId,
-                                data: analysisPayload
-                            }, 'POST');
-                            console.log('[saveProject] write_user_quote_file result:', result);
-                            if (result.success) {
-                                alert('保存成功！已写回原文件');
-                            } else {
-                                alert('云端保存失败：' + (result.message || '未知错误（看 console 详细）'));
-                            }
-                        } catch (e) {
-                            alert('已保存到本地，云端同步失败（' + e.message + '）');
+                    // Save to squirrel analysis/check_{projNo}.json in cloud
+                    try {
+                        const payload = JSON.parse(JSON.stringify(editData.value));
+                        const result = await gasCall('save_check_quote', {
+                            projNo: editData.value.projNo,
+                            quoteData: payload
+                        }, 'POST');
+                        if (result.success) {
+                            alert('保存成功！已同步到云端');
+                        } else {
+                            alert('云端保存失败：' + (result.message || '未知错误'));
                         }
+                    } catch (e) {
+                        alert('已保存到本地，云端同步失败（' + e.message + '）');
                     }
                     editDialogVisible.value = false;
                 };
