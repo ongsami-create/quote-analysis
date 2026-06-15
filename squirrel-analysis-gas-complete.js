@@ -1187,7 +1187,11 @@ function getCheckQuoteList() {
       // 只返回 check_ 开头的 JSON 文件
       if (name.startsWith('check_') && name.endsWith('.json')) {
         try {
-          const data = JSON.parse(file.getBlob().getDataAsString());
+          let data = JSON.parse(file.getBlob().getDataAsString());
+          // Defensive: handle double-encoded legacy data
+          if (typeof data === 'string') {
+            try { data = JSON.parse(data); } catch (e) { /* keep as-is */ }
+          }
           quotes.push({
             projNo: data.projNo || name.replace('check_', '').replace('.json', ''),
             customerName: data.customerName || data.customer?.name || '',
@@ -1225,14 +1229,19 @@ function getCheckQuote(projNo) {
     initializeFolders();
     const fileName = 'check_' + projNo + '.json';
     const files = analysisFolder.getFilesByName(fileName);
-    
+
     if (!files.hasNext()) {
       return { success: false, message: 'Quote not found: ' + projNo };
     }
-    
+
     const file = files.next();
-    const data = JSON.parse(file.getBlob().getDataAsString());
-    
+    let data = JSON.parse(file.getBlob().getDataAsString());
+
+    // Defensive: if data is a string (double-encoded from legacy saves), unwrap once
+    if (typeof data === 'string') {
+      try { data = JSON.parse(data); } catch (e) { /* keep as-is */ }
+    }
+
     return { success: true, quote: data };
   } catch (error) {
     return { success: false, message: error.toString() };
