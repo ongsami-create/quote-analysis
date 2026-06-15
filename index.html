@@ -1833,9 +1833,12 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     } else {
                         try {
                             const result = await gasCall('get_check_quote', { projNo: row.projNo });
+                            console.log('[openEdit] get_check_quote result:', result);
                             if (result.success && result.quote) {
                                 // Build full editData from the stored check_*.json (already in raw format with custom fields)
                                 const editObj = buildNewDataFromRaw(result.quote, row.projNo);
+                                console.log('[openEdit] editObj.customer:', editObj.customer);
+                                console.log('[openEdit] editObj.salesPerson:', editObj.salesPerson);
                                 editData.value = JSON.parse(JSON.stringify(editObj));
                                 // Cache for offline read-only access
                                 await saveQuoteToLocal(editData.value);
