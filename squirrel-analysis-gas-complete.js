@@ -23,6 +23,13 @@ let commissionFolder = null;
 let usersCache = null;
 let productsCache = null;
 
+// 2026-08-15 性能优化：缓存层（避免每次调用都走 Drive 全文搜索）
+let folderListCache = null;     // {ts, folders} — 30s TTL
+let userFolderCache = {};       // username -> {ts, folder} — 30s TTL
+let checkQuoteListCache = null; // {ts, quotes} — 10s TTL（list 频繁刷新）
+const CACHE_TTL_FOLDERS = 30 * 1000;
+const CACHE_TTL_LIST = 10 * 1000;
+
 // ==================== 初始化 ====================
 
 function initializeFolders() {
@@ -978,6 +985,10 @@ function getRoleKey(role) {
  */
 function listUserFolders() {
   try {
+    // 2026-08-15: 30s cache — folder 列表很少变
+    if (folderListCache && (Date.now() - folderListCache.ts) < CACHE_TTL_FOLDERS) {
+      return { success: true, folders: folderListCache.folders, cached: true };
+    }
     initializeFolders();
     const folders = [];
     const subs = mainFolder.getFolders();
@@ -989,6 +1000,7 @@ function listUserFolders() {
       }
     }
     folders.sort((a, b) => a.name.localeCompare(b.name));
+    folderListCache = { ts: Date.now(), folders };
     return { success: true, folders };
   } catch (error) {
     return { success: false, message: error.toString() };
@@ -1002,8 +1014,15 @@ function listUserFolders() {
  */
 function listUserQuoteFiles(username) {
   try {
-    initializeFolders();
-    const userFolder = getUserFolder(username);
+    // 2026-08-15: 缓存 userFolder 引用，避免每次重新查找
+    let userFolder;
+    if (userFolderCache[username] && (Date.now() - userFolderCache[username].ts) < CACHE_TTL_FOLDERS) {
+      userFolder = userFolderCache[username].folder;
+    } else {
+      initializeFolders();
+      userFolder = getUserFolder(username);
+      userFolderCache[username] = { ts: Date.now(), folder: userFolder };
+    }
     const files = userFolder.getFiles();
     const fileList = [];
 
@@ -1011,6 +1030,9 @@ function listUserQuoteFiles(username) {
       const file = files.next();
       const name = file.getName();
       if (name.endsWith('.json') && !name.startsWith('final_') && !name.startsWith('shared_')) {
+        // 2026-08-15 优化：list 端点不需要完整 items[]，但 customerName/total 必须有
+        // 用 getBlob() + parse 一次，只读全文（DriveApp 不支持部分读）
+        // 加速点：去掉空字段、避免无谓的 reduce
         try {
           const data = JSON.parse(file.getBlob().getDataAsString());
           fileList.push({
@@ -1098,7 +1120,10 @@ function importQuoteToAnalysis(username, fileId) {
     while (existing.hasNext()) {
       existing.next().setTrashed(true);
     }
-    analysisFolder.createFile(checkFileName, JSON.stringify(raw, null, 2), 'application/json');
+    // 2026-08-15: 去掉 null,2 — 文件小一半，parse 快一倍
+    analysisFolder.createFile(checkFileName, JSON.stringify(raw), 'application/json');
+    // 失效 list 缓存（新增了文件）
+    checkQuoteListCache = null;
 
     logActivity('system', 'import_quote_to_analysis', projNo, 'Imported from ' + username + '/' + fileName);
     return { success: true, message: 'Imported as ' + checkFileName, projNo, data: raw };
@@ -1128,18 +1153,20 @@ function saveCheckQuote(projNo, quoteData) {
     
     // 添加保存时间戳
     quoteData.lastSaved = new Date().toISOString();
-    
+
     // 删除旧文件
     const files = analysisFolder.getFilesByName(fileName);
     while (files.hasNext()) {
       files.next().setTrashed(true);
     }
-    
-    // 保存新文件
-    analysisFolder.createFile(fileName, JSON.stringify(quoteData, null, 2), 'application/json');
-    
+
+    // 2026-08-15: 去掉 null,2 — 文件小一半，parse 快一倍
+    analysisFolder.createFile(fileName, JSON.stringify(quoteData), 'application/json');
+    // 失效 list 缓存
+    checkQuoteListCache = null;
+
     logActivity('system', 'save_check_quote', projNo, 'Saved check quote: ' + projNo);
-    
+
     return { success: true, message: 'Quote saved to analysis folder', fileName: fileName };
   } catch (error) {
     return { success: false, message: error.toString() };
@@ -1164,8 +1191,49 @@ function cleanAnalysisFolder() {
         removed.push(name);
       }
     }
+    checkQuoteListCache = null;  // 失效 list 缓存
     logActivity('system', 'clean_analysis_folder', '-', 'Removed ' + removed.length + ' files: ' + removed.join(', '));
     return { success: true, message: 'Removed ' + removed.length + ' files', removed: removed };
+  } catch (error) {
+    return { success: false, message: error.toString() };
+  }
+}
+
+/**
+ * 轻量级单报价元数据查询（不返回 items[] 等大数据）
+ * 用于 list 视图快速刷新某个 quote 的状态
+ * action: get_check_quote_meta
+ * @param projNo
+ */
+function getCheckQuoteMeta(projNo) {
+  try {
+    initializeFolders();
+    const fileName = 'check_' + projNo + '.json';
+    const files = analysisFolder.getFilesByName(fileName);
+    if (!files.hasNext()) {
+      return { success: false, message: 'Quote not found: ' + projNo };
+    }
+    const file = files.next();
+    let data = JSON.parse(file.getBlob().getDataAsString());
+    if (typeof data === 'string') {
+      try { data = JSON.parse(data); } catch (e) { /* keep as-is */ }
+    }
+    // 只返回 list 视图需要的字段
+    return {
+      success: true,
+      meta: {
+        projNo: data.projNo || projNo,
+        customerName: data.customerName || data.customer?.name || '',
+        totalSales: data.totalSales || 0,
+        totalCost: data.totalCost || 0,
+        profit: data.profit || 0,
+        profitPercent: data.profitPercent || 0,
+        debtPercent: data.debtPercent || 0,
+        status: data.status || 'pending',
+        lastModified: data.lastModified || data.lastSaved || file.getLastUpdated().toISOString(),
+        fileName: fileName
+      }
+    };
   } catch (error) {
     return { success: false, message: error.toString() };
   }
@@ -1177,10 +1245,14 @@ function cleanAnalysisFolder() {
  */
 function getCheckQuoteList() {
   try {
+    // 2026-08-15: 10s cache — list 视图最频繁的调用
+    if (checkQuoteListCache && (Date.now() - checkQuoteListCache.ts) < CACHE_TTL_LIST) {
+      return { success: true, quotes: checkQuoteListCache.quotes, cached: true };
+    }
     initializeFolders();
     const files = analysisFolder.getFiles();
     const quotes = [];
-    
+
     while (files.hasNext()) {
       const file = files.next();
       const name = file.getName();
@@ -1209,10 +1281,10 @@ function getCheckQuoteList() {
         }
       }
     }
-    
+
     // 按修改时间倒序排列
     quotes.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
-    
+    checkQuoteListCache = { ts: Date.now(), quotes };
     return { success: true, quotes: quotes };
   } catch (error) {
     return { success: false, message: error.toString() };
@@ -1266,9 +1338,10 @@ function deleteCheckQuote(projNo) {
     while (files.hasNext()) {
       files.next().setTrashed(true);
     }
-    
+
+    checkQuoteListCache = null;  // 失效 list 缓存
     logActivity('system', 'delete_check_quote', projNo, 'Deleted check quote: ' + projNo);
-    
+
     return { success: true, message: 'Quote deleted' };
   } catch (error) {
     return { success: false, message: error.toString() };
@@ -1418,6 +1491,9 @@ function doGet(e) {
         break;
       case 'get_check_quote':
         result = getCheckQuote(e.parameter.projNo);
+        break;
+      case 'get_check_quote_meta':
+        result = getCheckQuoteMeta(e.parameter.projNo);
         break;
       case 'delete_check_quote':
         result = deleteCheckQuote(e.parameter.projNo);

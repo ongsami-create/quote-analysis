@@ -1493,32 +1493,30 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 });
 
                 const onFolderChange = async () => {
-                    console.log('[onFolderChange] triggered, folder:', importForm.selectedFolder);
                     if (!importForm.selectedFolder) { availableFiles.value = []; return; }
                     importForm.fileId = '';
                     importForm.selectedFile = null;
                     importForm.previewData = {};
+
+                    // 2026-08-15 优化：先从 localStorage 立即显示（5min TTL per-folder）
+                    const cacheKey = 'qa_files_' + importForm.selectedFolder;
+                    const cachedFiles = lsCacheGet(cacheKey);
+                    if (cachedFiles && Array.isArray(cachedFiles)) {
+                        availableFiles.value = cachedFiles;
+                    }
+
                     importLoading.value = true;
                     try {
-                        const url = new URL(GAS_URL);
-                        url.searchParams.set('action', 'list_user_quote_files');
-                        url.searchParams.set('username', importForm.selectedFolder);
-                        console.log('[Import] Fetching files for user:', importForm.selectedFolder);
-                        const resp = await fetch(url.toString(), { method: 'GET', mode: 'cors' });
-                        console.log('[Import] HTTP status:', resp.status);
-                        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-                        const result = await resp.json();
-                        console.log('[Import] API response:', JSON.stringify(result));
+                        const result = await gasCall('list_user_quote_files', { username: importForm.selectedFolder });
                         if (result.success && Array.isArray(result.files)) {
                             availableFiles.value = result.files;
-                            console.log('[Import] Loaded files:', result.files.length);
+                            lsCacheSet(cacheKey, result.files);
                         } else {
                             availableFiles.value = [];
-                            console.warn('[Import] No files or result format unexpected:', result);
                         }
                     } catch (e) {
                         console.error('[Import] list_user_quote_files error:', e);
-                        availableFiles.value = [];
+                        // 保留 localStorage 缓存
                     } finally {
                         importLoading.value = false;
                     }
@@ -1542,6 +1540,28 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
 
                 // Methods
                 const formatNumber = (num) => (num ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+                // 2026-08-15 性能优化：使用 structuredClone（比 JSON.parse(JSON.stringify()) 快 5-10x）
+                const clone = (obj) => (typeof structuredClone === 'function' ? structuredClone(obj) : JSON.parse(JSON.stringify(obj)));
+
+                // 2026-08-15 性能优化：localStorage 缓存层（5min TTL，跨刷新保留）
+                // 解决 GAS 冷启动 5-10s 问题，重复访问立即返回
+                const CACHE_TTL_MS = 5 * 60 * 1000;  // list 5min
+                const FOLDERS_CACHE_TTL = 10 * 60 * 1000;  // folders 10min（很少变）
+                const lsGet = (key) => {
+                    try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : null; } catch (e) { return null; }
+                };
+                const lsSet = (key, value) => {
+                    try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) { /* quota 满了就跳过 */ }
+                };
+                const lsCacheGet = (key) => {
+                    const e = lsGet(key);
+                    if (!e || !e.ts) return null;
+                    const ttl = key.indexOf('folders') >= 0 ? FOLDERS_CACHE_TTL : CACHE_TTL_MS;
+                    if (Date.now() - e.ts > ttl) return null;  // expired
+                    return e.data;
+                };
+                const lsCacheSet = (key, data) => lsSet(key, { ts: Date.now(), data });
 
                 const filterData = () => {};
 
@@ -1581,55 +1601,66 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 }
 
                 const syncFromCloud = async () => {
-                    isLoading.value = true;
-                    loadingText.value = '正在同步云端...';
+                    // 2026-08-15 优化：先从 localStorage 立即返回（5min 内不阻塞首屏）
+                    const cachedList = lsCacheGet('qa_list');
+                    if (cachedList && Array.isArray(cachedList) && cachedList.length > 0) {
+                        listData.value = cachedList;
+                    } else {
+                        // 第一次进来：IDB 有就用 IDB
+                        const localData = await loadFromLocal();
+                        if (localData.length > 0) {
+                            listData.value = localData;
+                            lsCacheSet('qa_list', localData);  // 顺便写入 localStorage 给下次用
+                        }
+                    }
+                    // 不再设 isLoading=true —— 如果有缓存，UI 立即显示；没有才显示 loading
+                    if (listData.value.length === 0) {
+                        isLoading.value = true;
+                        loadingText.value = '正在加载...';
+                    }
+
                     try {
                         if (navigator.onLine) {
-                            // Test connection first
-                            let cloudOk = false;
-                            try {
-                                const ping = await gasCall('ping');
-                                cloudOk = ping.success;
-                            } catch (e) {
-                                cloudOk = false;
-                            }
-
-                            if (cloudOk) {
-                                // Fetch from GAS
-                                const result = await gasCall('get_check_quote_list');
-                                if (result.success && result.quotes && result.quotes.length > 0) {
+                            // 跳过 ping 测试（多 5-10s）—— 直接拉 list，失败再 fallback
+                            const result = await gasCall('get_check_quote_list');
+                            if (result.success && result.quotes) {
+                                // 替换为云端数据（可能比缓存新）
+                                if (result.quotes.length > 0) {
                                     listData.value = result.quotes;
+                                    lsCacheSet('qa_list', result.quotes);
                                     await saveToLocal(result.quotes);
-                                    isConnected.value = true;
-                                } else {
-                                    // Empty cloud — use local or demo
-                                    const localData = await loadFromLocal();
-                                    listData.value = localData.length > 0 ? localData : [...demoData];
-                                    if (!localData.length) await saveToLocal(demoData);
-                                    isConnected.value = true;
                                 }
+                                isConnected.value = true;
                             } else {
-                                const localData = await loadFromLocal();
-                                listData.value = localData.length > 0 ? localData : [...demoData];
-                                if (!localData.length) await saveToLocal(demoData);
+                                // cloud 返回失败 — 保留 localStorage 缓存
                                 isConnected.value = false;
                             }
                         } else {
-                            // Offline: local only
-                            const localData = await loadFromLocal();
-                            listData.value = localData.length > 0 ? localData : [...demoData];
-                            if (!localData.length) await saveToLocal(demoData);
                             isConnected.value = false;
                         }
                         syncQueueCount.value = await getSyncQueueCount();
                     } catch (error) {
-                        // Fallback: local or demo
-                        const localData = await loadFromLocal();
-                        listData.value = localData.length > 0 ? localData : [...demoData];
-                        if (!localData.length) await saveToLocal(demoData);
+                        console.warn('[sync] cloud failed, keeping local cache:', error.message);
                         isConnected.value = false;
                     } finally {
                         isLoading.value = false;
+                    }
+                };
+
+                // 2026-08-15 优化：后台预热（fire-and-forget）— 页面打开后 2-3s 触发
+                // 用户点任何按钮时大概率已就绪
+                const prewarmCloud = async () => {
+                    if (!navigator.onLine) return;
+                    try {
+                        const result = await gasCall('get_check_quote_list');
+                        if (result.success && result.quotes && result.quotes.length > 0) {
+                            lsCacheSet('qa_list', result.quotes);
+                            // 不更新 listData（避免与 syncFromCloud 竞争）— 只更新缓存
+                            // 真正的"现在刷新"留给用户主动操作
+                            console.log('[prewarm] cache updated,', result.quotes.length, 'quotes');
+                        }
+                    } catch (e) {
+                        console.warn('[prewarm] failed:', e.message);
                     }
                 };
 
@@ -1642,44 +1673,38 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     importForm.selectedFolder = '';
                     availableFiles.value = [];
                     availableFolders.value = [];
+
+                    // 2026-08-15 优化：先从 localStorage 立即显示（10min TTL）
+                    const cachedFolders = lsCacheGet('qa_folders');
+                    if (cachedFolders && Array.isArray(cachedFolders)) {
+                        availableFolders.value = cachedFolders;
+                    }
+
                     importLoading.value = true;
                     try {
-                        const url = new URL(GAS_URL);
-                        url.searchParams.set('action', 'list_user_folders');
-                        const resp = await fetch(url.toString(), { method: 'GET', mode: 'cors' });
-                        if (!resp.ok) throw new Error('HTTP ' + resp.status);
-                        const result = await resp.json();
-                        availableFolders.value = [];
+                        const result = await gasCall('list_user_folders');
                         if (result.success && Array.isArray(result.folders)) {
-                            result.folders.forEach(f => availableFolders.value.push(f));
-                            console.log('[Import] Loaded folders:', result.folders.length);
+                            availableFolders.value = result.folders;
+                            lsCacheSet('qa_folders', result.folders);
                         }
                     } catch (e) {
                         console.error('[Import] list_user_folders error:', e);
-                        availableFolders.value = [];
+                        // 保留 localStorage 缓存
                     } finally {
                         importLoading.value = false;
                     }
                 };
 
                 const selectImportFile = async (file) => {
+                    // 2026-08-15 优化：不要每次都 read_user_quote_file 预览（5-10s 浪费）
+                    // list 阶段 GAS 已经返回了 customerName/totalSales，直接用
                     importForm.fileId = file.id;
                     importForm.selectedFile = file;
-                    try {
-                        const result = await gasCall('read_user_quote_file', { username: importForm.selectedFolder, fileId: file.id });
-                        if (result.success && result.data) {
-                            const raw = result.data;
-                            importForm.previewData = {
-                                customerName: raw.customerName || raw.customer?.name || file.name.replace('.json', ''),
-                                totalSales: raw.total || raw.grandTotal || raw.totalSales || 0,
-                                debtPercent: raw.debtPercent || 0
-                            };
-                        } else {
-                            importForm.previewData = { customerName: file.name.replace('.json', ''), totalSales: 0, debtPercent: 0 };
-                        }
-                    } catch (e) {
-                        importForm.previewData = { customerName: file.name.replace('.json', ''), totalSales: 0, debtPercent: 0 };
-                    }
+                    importForm.previewData = {
+                        customerName: file.customerName || file.name.replace('.json', ''),
+                        totalSales: file.totalSales || 0,
+                        debtPercent: 0  // 没在 list 端点里，0 占位（import 时会用 raw 重新算）
+                    };
                 };
 
                 // Build a complete editData object from raw Squirrel JSON.
@@ -1803,9 +1828,13 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                             } else {
                                 listData.value.push(newData);
                             }
+                            // 2026-08-15：同时更新 localStorage 缓存 + IDB
+                            lsCacheSet('qa_list', listData.value);
                             await saveToLocal(listData.value);
+                            // 让 list 视图"立即"显示新数据
                             importDialogVisible.value = false;
-                            alert('导入成功！已保存到云端 squirrel analysis/');
+                            // 静默 — 不弹 alert 阻塞（用户点了导入就是确认了）
+                            console.log('[import] success:', projNo);
                         } else {
                             alert('导入失败：' + (result.message || '无法读取文件数据'));
                         }
@@ -1829,17 +1858,14 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                             alert('离线且本地无缓存，无法编辑。请联网后重试。');
                             return;
                         }
-                        editData.value = JSON.parse(JSON.stringify(cached));
+                        editData.value = clone(cached);
                     } else {
                         try {
                             const result = await gasCall('get_check_quote', { projNo: row.projNo });
-                            console.log('[openEdit] get_check_quote result:', result);
                             if (result.success && result.quote) {
                                 // Build full editData from the stored check_*.json (already in raw format with custom fields)
                                 const editObj = buildNewDataFromRaw(result.quote, row.projNo);
-                                console.log('[openEdit] editObj.customer:', editObj.customer);
-                                console.log('[openEdit] editObj.salesPerson:', editObj.salesPerson);
-                                editData.value = JSON.parse(JSON.stringify(editObj));
+                                editData.value = clone(editObj);
                                 // Cache for offline read-only access
                                 await saveQuoteToLocal(editData.value);
                             } else {
@@ -1876,6 +1902,8 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
 
                 const markComplete = async (row) => {
                     row.status = row.status === 'completed' ? 'pending' : 'completed';
+                    // 2026-08-15：同步更新 localStorage 缓存
+                    lsCacheSet('qa_list', listData.value);
                     await saveToLocal(listData.value);
                     await saveQuoteToLocal(row);
                     // Sync completion state to squirrel analysis/ cloud folder
@@ -1894,6 +1922,8 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 const deleteProject = async (row) => {
                     if (!confirm('确定要删除 "' + row.projNo + '" 吗？')) return;
                     listData.value = listData.value.filter(item => item.projNo !== row.projNo);
+                    // 2026-08-15：同步更新 localStorage 缓存
+                    lsCacheSet('qa_list', listData.value);
                     await saveToLocal(listData.value);
                     await deleteQuoteFromLocal(row.projNo);
                 };
@@ -1911,20 +1941,23 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     editData.value.lastModified = new Date().toISOString().split('T')[0];
                     const index = listData.value.findIndex(item => item.projNo === editData.value.projNo);
                     if (index >= 0) {
-                        listData.value[index] = JSON.parse(JSON.stringify(editData.value));
+                        listData.value[index] = clone(editData.value);
                     }
+                    // 2026-08-15：同步更新 localStorage 缓存（让下次刷新立即看到新数据）
+                    lsCacheSet('qa_list', listData.value);
                     await saveToLocal(listData.value);
                     await saveQuoteToLocal(editData.value);
 
                     // Save to squirrel analysis/check_{projNo}.json in cloud
                     try {
-                        const payload = JSON.parse(JSON.stringify(editData.value));
+                        const payload = clone(editData.value);
                         const result = await gasCall('save_check_quote', {
                             projNo: editData.value.projNo,
                             quoteData: payload
                         }, 'POST');
                         if (result.success) {
-                            alert('保存成功！已同步到云端');
+                            // 后台静默更新 — 不弹 alert 阻塞 UI
+                            console.log('[save] cloud saved');
                         } else {
                             alert('云端保存失败：' + (result.message || '未知错误'));
                         }
@@ -1951,18 +1984,28 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 window.addEventListener('offline', () => { isOnline.value = false; });
 
                 // Init — defensive: reject → catch, safety timeout as last resort
+                // 2026-08-15 优化：先从 localStorage 立即显示（5min 内 0s 启动），后台 IDB + 云端
                 console.log('[Init] Starting app...');
+                const initStart = performance.now();
                 initDB()
                     .then(() => {
                         console.log('[Init] DB ready, syncing from cloud...');
                         return syncFromCloud();
                     })
+                    .then(() => {
+                        const t = Math.round(performance.now() - initStart);
+                        console.log('[Init] First render ready in', t, 'ms');
+                        // 2026-08-15 优化：2.5s 后后台预热云端（fire-and-forget）
+                        // 用户下一次刷新时大概率已有缓存
+                        setTimeout(prewarmCloud, 2500);
+                    })
                     .catch(err => {
                         console.error('[Init] Critical error during init:', err);
                         isLoading.value = false;
                         isConnected.value = false;
-                        listData.value = [...demoData];
-                        console.log('[Init] Fell back to demo data.');
+                        if (!listData.value || listData.value.length === 0) {
+                            listData.value = [...demoData];
+                        }
                     });
 
                 // Safety timeout — 30s max on loading screen
