@@ -23,12 +23,26 @@ let commissionFolder = null;
 let usersCache = null;
 let productsCache = null;
 
-// 2026-08-15 性能优化：缓存层（避免每次调用都走 Drive 全文搜索）
-let folderListCache = null;     // {ts, folders} — 30s TTL
-let userFolderCache = {};       // username -> {ts, folder} — 30s TTL
-let checkQuoteListCache = null; // {ts, quotes} — 10s TTL（list 频繁刷新）
-const CACHE_TTL_FOLDERS = 30 * 1000;
-const CACHE_TTL_LIST = 10 * 1000;
+// 2026-08-15 性能优化：缓存层（用 CacheService 持久化跨调用）
+// 教训：模块级 let 变量在 GAS Web App 跨调用会被重置（新脚本上下文），不能用！
+let folderListCache = null;     // 留作 fallback（单次调用内仍可省重复 set）
+let userFolderCache = {};
+let checkQuoteListCache = null;
+const CACHE_TTL_FOLDERS = 30;   // CacheService TTL 单位是秒
+const CACHE_TTL_LIST = 10;
+const CACHE_TTL_USER_FOLDER = 30;
+
+// 跨调用持久化缓存（CacheService.getScriptCache — 6h max, 100KB max）
+function cacheGet(key) {
+  try { const v = CacheService.getScriptCache().get(key); return v ? JSON.parse(v) : null; }
+  catch (e) { return null; }
+}
+function cachePut(key, value, ttlSec) {
+  try { CacheService.getScriptCache().put(key, JSON.stringify(value), ttlSec); } catch (e) {}
+}
+function cacheRemove(key) {
+  try { CacheService.getScriptCache().remove(key); } catch (e) {}
+}
 
 // ==================== 初始化 ====================
 
@@ -985,10 +999,10 @@ function getRoleKey(role) {
  */
 function listUserFolders() {
   try {
-    // 2026-08-15: 30s cache — folder 列表很少变
-    if (folderListCache && (Date.now() - folderListCache.ts) < CACHE_TTL_FOLDERS) {
-      return { success: true, folders: folderListCache.folders, cached: true };
-    }
+    // 2026-08-15: 30s 跨调用 cache（CacheService 持久化）
+    const cached = cacheGet('qa_folders_v1');
+    if (cached) return { success: true, folders: cached, cached: true };
+
     initializeFolders();
     const folders = [];
     const subs = mainFolder.getFolders();
@@ -1000,6 +1014,7 @@ function listUserFolders() {
       }
     }
     folders.sort((a, b) => a.name.localeCompare(b.name));
+    cachePut('qa_folders_v1', folders, CACHE_TTL_FOLDERS);
     folderListCache = { ts: Date.now(), folders };
     return { success: true, folders };
   } catch (error) {
@@ -1014,15 +1029,19 @@ function listUserFolders() {
  */
 function listUserQuoteFiles(username) {
   try {
-    // 2026-08-15: 缓存 userFolder 引用，避免每次重新查找
+    // 2026-08-15: 缓存 user folder id（DriveApp Folder 对象本身不能跨调用 serialize）
+    // 用 CacheService 存 id 字符串，getFolderById 是 O(1) lookup
+    initializeFolders();
     let userFolder;
-    if (userFolderCache[username] && (Date.now() - userFolderCache[username].ts) < CACHE_TTL_FOLDERS) {
-      userFolder = userFolderCache[username].folder;
-    } else {
-      initializeFolders();
-      userFolder = getUserFolder(username);
-      userFolderCache[username] = { ts: Date.now(), folder: userFolder };
+    const cachedId = cacheGet('qa_userFolder_' + username);
+    if (cachedId) {
+      try { userFolder = DriveApp.getFolderById(cachedId); } catch (e) { userFolder = null; }
     }
+    if (!userFolder) {
+      userFolder = getUserFolder(username);
+      cachePut('qa_userFolder_' + username, userFolder.getId(), CACHE_TTL_USER_FOLDER);
+    }
+    userFolderCache[username] = { ts: Date.now(), folder: userFolder };
     const files = userFolder.getFiles();
     const fileList = [];
 
@@ -1122,7 +1141,8 @@ function importQuoteToAnalysis(username, fileId) {
     }
     // 2026-08-15: 去掉 null,2 — 文件小一半，parse 快一倍
     analysisFolder.createFile(checkFileName, JSON.stringify(raw), 'application/json');
-    // 失效 list 缓存（新增了文件）
+    // 失效 list 缓存（CacheService 跨调用 + 模块级 fallback）
+    cacheRemove('qa_list_v1');
     checkQuoteListCache = null;
 
     logActivity('system', 'import_quote_to_analysis', projNo, 'Imported from ' + username + '/' + fileName);
@@ -1162,7 +1182,8 @@ function saveCheckQuote(projNo, quoteData) {
 
     // 2026-08-15: 去掉 null,2 — 文件小一半，parse 快一倍
     analysisFolder.createFile(fileName, JSON.stringify(quoteData), 'application/json');
-    // 失效 list 缓存
+    // 失效 list 缓存（CacheService 跨调用持久 + 模块级 fallback）
+    cacheRemove('qa_list_v1');
     checkQuoteListCache = null;
 
     logActivity('system', 'save_check_quote', projNo, 'Saved check quote: ' + projNo);
@@ -1191,6 +1212,7 @@ function cleanAnalysisFolder() {
         removed.push(name);
       }
     }
+    cacheRemove('qa_list_v1');
     checkQuoteListCache = null;  // 失效 list 缓存
     logActivity('system', 'clean_analysis_folder', '-', 'Removed ' + removed.length + ' files: ' + removed.join(', '));
     return { success: true, message: 'Removed ' + removed.length + ' files', removed: removed };
@@ -1245,10 +1267,10 @@ function getCheckQuoteMeta(projNo) {
  */
 function getCheckQuoteList() {
   try {
-    // 2026-08-15: 10s cache — list 视图最频繁的调用
-    if (checkQuoteListCache && (Date.now() - checkQuoteListCache.ts) < CACHE_TTL_LIST) {
-      return { success: true, quotes: checkQuoteListCache.quotes, cached: true };
-    }
+    // 2026-08-15: 10s 跨调用 cache（CacheService 持久化）
+    const cached = cacheGet('qa_list_v1');
+    if (cached) return { success: true, quotes: cached, cached: true };
+
     initializeFolders();
     const files = analysisFolder.getFiles();
     const quotes = [];
@@ -1284,6 +1306,7 @@ function getCheckQuoteList() {
 
     // 按修改时间倒序排列
     quotes.sort((a, b) => new Date(b.lastModified) - new Date(a.lastModified));
+    cachePut('qa_list_v1', quotes, CACHE_TTL_LIST);
     checkQuoteListCache = { ts: Date.now(), quotes };
     return { success: true, quotes: quotes };
   } catch (error) {
@@ -1339,6 +1362,7 @@ function deleteCheckQuote(projNo) {
       files.next().setTrashed(true);
     }
 
+    cacheRemove('qa_list_v1');
     checkQuoteListCache = null;  // 失效 list 缓存
     logActivity('system', 'delete_check_quote', projNo, 'Deleted check quote: ' + projNo);
 
