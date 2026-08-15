@@ -35,10 +35,11 @@ const CACHE_TTL_USER_FOLDER = 30;
 // 跨调用持久化缓存（CacheService.getScriptCache — 6h max, 100KB max）
 function cacheGet(key) {
   try { const v = CacheService.getScriptCache().get(key); return v ? JSON.parse(v) : null; }
-  catch (e) { return null; }
+  catch (e) { console.error('cacheGet FAILED', key, e.toString()); return null; }
 }
 function cachePut(key, value, ttlSec) {
-  try { CacheService.getScriptCache().put(key, JSON.stringify(value), ttlSec); } catch (e) {}
+  try { CacheService.getScriptCache().put(key, JSON.stringify(value), ttlSec); }
+  catch (e) { console.error('cachePut FAILED', key, e.toString()); }
 }
 function cacheRemove(key) {
   try { CacheService.getScriptCache().remove(key); } catch (e) {}
@@ -1524,6 +1525,18 @@ function doGet(e) {
         break;
       case 'ping':
         result = { success: true, message: 'API is running', timestamp: new Date().toISOString() };
+        break;
+      case 'debug_cache':
+        // 2026-08-15: 诊断 CacheService 是否工作
+        try {
+          const testKey = 'qa_test_' + Date.now();
+          const testValue = { hello: 'world', ts: Date.now() };
+          CacheService.getScriptCache().put(testKey, JSON.stringify(testValue), 60);
+          const back = CacheService.getScriptCache().get(testKey);
+          result = { success: true, write: JSON.stringify(testValue), read: back, match: back === JSON.stringify(testValue) };
+        } catch (e) {
+          result = { success: false, error: e.toString(), message: 'CacheService not available — check OAuth scope "script.cache"' };
+        }
         break;
       default:
         result = { success: false, message: 'Unknown action: ' + action };
