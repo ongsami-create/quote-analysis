@@ -39,6 +39,7 @@
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
             letter-spacing: -0.01em;
+            font-size: 15px;
         }
 
         /* Header — 毛玻璃浅色顶栏 */
@@ -47,7 +48,7 @@
             -webkit-backdrop-filter: saturate(180%) blur(20px);
             backdrop-filter: saturate(180%) blur(20px);
             color: var(--text);
-            padding: 12px 24px;
+            padding: 18px 32px;
             position: sticky;
             top: 0;
             z-index: 100;
@@ -56,46 +57,34 @@
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
-            gap: 10px;
+            gap: 14px;
         }
 
-        .header-left { display: flex; align-items: center; gap: 12px; }
+        .header-left { display: flex; align-items: center; gap: 16px; }
 
-        .logo {
-            width: 32px;
-            height: 32px;
-            background: linear-gradient(135deg, #007AFF, #5856D6);
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            color: white;
-            font-size: 13px;
-            letter-spacing: -0.02em;
-        }
+        .logo { display: none; }  /* 2026-08-16: 不再显示 QA 字样 */
 
-        /* 2026-08-16: Squirrel Care 品牌标识 */
+        /* 2026-08-16: Squirrel Care 品牌标识（加大） */
         .brand-mark {
-            height: 32px;
+            height: 56px;
             margin-right: 6px;
             background: white;
-            border-radius: 6px;
-            padding: 3px 7px;
+            border-radius: 10px;
+            padding: 6px 10px;
             object-fit: contain;
             box-shadow: var(--shadow-sm);
         }
 
-        .title { font-size: 17px; font-weight: 600; letter-spacing: -0.02em; }
+        .title { font-size: 22px; font-weight: 600; letter-spacing: -0.02em; }
 
-        .header-right { display: flex; align-items: center; gap: 10px; }
+        .header-right { display: flex; align-items: center; gap: 12px; }
 
         .connection-status {
             display: flex;
             align-items: center;
-            gap: 5px;
-            font-size: 12px;
-            padding: 4px 10px;
+            gap: 6px;
+            font-size: 13px;
+            padding: 6px 14px;
             border-radius: 999px;
             background: rgba(0, 0, 0, 0.05);
             color: var(--subtext);
@@ -104,7 +93,7 @@
         .connection-status.online { background: rgba(52, 199, 89, 0.12); color: #1f7a3a; }
         .connection-status.offline { background: rgba(255, 59, 48, 0.12); color: #b8231c; }
 
-        .main-container { max-width: 1400px; margin: 0 auto; padding: 24px; }
+        .main-container { max-width: 1600px; margin: 0 auto; padding: 32px; }
 
         /* Action Bar — 毛玻璃卡片 */
         .action-bar {
@@ -112,28 +101,28 @@
             -webkit-backdrop-filter: saturate(180%) blur(20px);
             backdrop-filter: saturate(180%) blur(20px);
             border-radius: 14px;
-            padding: 14px 20px;
-            margin-bottom: 18px;
+            padding: 18px 24px;
+            margin-bottom: 22px;
             box-shadow: var(--shadow-sm);
             border: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
             align-items: center;
             flex-wrap: wrap;
-            gap: 12px;
+            gap: 14px;
         }
 
         .btn {
-            padding: 8px 16px;
+            padding: 10px 20px;
             border: none;
-            border-radius: 8px;
+            border-radius: 9px;
             cursor: pointer;
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 500;
             transition: all 0.18s ease;
             display: inline-flex;
             align-items: center;
-            gap: 5px;
+            gap: 6px;
             font-family: inherit;
             letter-spacing: -0.01em;
         }
@@ -159,23 +148,23 @@
             -webkit-backdrop-filter: saturate(180%) blur(20px);
             backdrop-filter: saturate(180%) blur(20px);
             border-radius: 14px;
-            padding: 14px 20px;
-            margin-bottom: 18px;
+            padding: 18px 24px;
+            margin-bottom: 22px;
             box-shadow: var(--shadow-sm);
             border: 1px solid var(--border);
             display: flex;
-            gap: 12px;
+            gap: 14px;
             flex-wrap: wrap;
             align-items: center;
         }
 
         .search-input {
             flex: 1;
-            min-width: 200px;
-            padding: 8px 12px;
+            min-width: 240px;
+            padding: 10px 14px;
             border: 1px solid var(--border-strong);
-            border-radius: 8px;
-            font-size: 13px;
+            border-radius: 9px;
+            font-size: 14px;
             background: white;
             color: var(--text);
             font-family: inherit;
@@ -184,10 +173,10 @@
         .search-input:focus { outline: none; border-color: var(--secondary); box-shadow: 0 0 0 3px rgba(0, 122, 255, 0.12); }
 
         .filter-select {
-            padding: 8px 12px;
+            padding: 10px 14px;
             border: 1px solid var(--border-strong);
-            border-radius: 8px;
-            font-size: 13px;
+            border-radius: 9px;
+            font-size: 14px;
             background: white;
             color: var(--text);
             cursor: pointer;
@@ -205,26 +194,26 @@
         }
 
         .table-header {
-            padding: 14px 20px;
+            padding: 18px 24px;
             border-bottom: 1px solid var(--border);
             display: flex;
             justify-content: space-between;
             align-items: center;
         }
 
-        .table-title { font-size: 15px; font-weight: 600; letter-spacing: -0.01em; }
+        .table-title { font-size: 17px; font-weight: 600; letter-spacing: -0.01em; }
 
         table { width: 100%; border-collapse: collapse; }
         th, td {
-            padding: 11px 16px;
+            padding: 14px 18px;
             text-align: left;
             border-bottom: 1px solid var(--border);
-            font-size: 13px;
+            font-size: 14px;
         }
         th {
             background: #fafafa;
             font-weight: 600;
-            font-size: 12px;
+            font-size: 13px;
             color: var(--subtext);
             letter-spacing: 0.02em;
             text-transform: uppercase;
@@ -237,9 +226,9 @@
 
         /* Status Badge */
         .status-badge {
-            padding: 3px 10px;
+            padding: 4px 12px;
             border-radius: 999px;
-            font-size: 11px;
+            font-size: 12px;
             font-weight: 600;
             display: inline-block;
             letter-spacing: 0.01em;
@@ -260,12 +249,12 @@
         /* Summary Bar */
         .summary-bar {
             background: #fafafa;
-            padding: 12px 20px;
+            padding: 14px 24px;
             border-top: 1px solid var(--border);
             display: flex;
-            gap: 24px;
+            gap: 28px;
             flex-wrap: wrap;
-            font-size: 12px;
+            font-size: 13px;
             color: var(--subtext);
         }
         .summary-item { display: flex; gap: 6px; align-items: center; }
@@ -349,10 +338,10 @@
         .section { border-bottom: 1px solid var(--border); }
         .section:last-child { border-bottom: none; }
         .section-header {
-            padding: 12px 20px;
+            padding: 14px 24px;
             background: #fafafa;
             font-weight: 600;
-            font-size: 13px;
+            font-size: 15px;
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -362,18 +351,18 @@
             letter-spacing: -0.01em;
         }
         .section-header:hover { background: rgba(0, 0, 0, 0.03); }
-        .section-content { padding: 16px 20px; }
+        .section-content { padding: 20px 24px; }
         .section.collapsed .section-content { display: none; }
 
         /* Form */
-        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; }
-        .form-group { display: flex; flex-direction: column; gap: 5px; }
-        .form-label { font-size: 11px; color: var(--subtext); font-weight: 500; letter-spacing: 0.01em; }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; }
+        .form-group { display: flex; flex-direction: column; gap: 6px; }
+        .form-label { font-size: 12px; color: var(--subtext); font-weight: 500; letter-spacing: 0.01em; }
         .form-input {
-            padding: 8px 10px;
+            padding: 10px 12px;
             border: 1px solid var(--border-strong);
-            border-radius: 7px;
-            font-size: 13px;
+            border-radius: 8px;
+            font-size: 14px;
             background: white;
             color: var(--text);
             font-family: inherit;
@@ -623,7 +612,6 @@
         <header class="header">
             <div class="header-left">
                 <img src="assets/squirrel-care.png" alt="Squirrel Care" class="brand-mark">
-                <div class="logo">QA</div>
                 <span class="title">Quote Analysis 报价分析</span>
                 <span v-if="syncQueueCount > 0" style="background: var(--warning); color: white; padding: 4px 10px; border-radius: 10px; font-size: 12px;">
                     待同步: {{ syncQueueCount }}
