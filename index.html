@@ -1873,6 +1873,22 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
 
                 const deleteProject = async (row) => {
                     if (!confirm('确定要删除 "' + row.projNo + '" 吗？')) return;
+                    // 2026-08-16: 先删云端 squirrel analysis/check_{projNo}.json，再清本地缓存
+                    if (navigator.onLine) {
+                        try {
+                            const result = await gasCall('delete_check_quote', { projNo: row.projNo });
+                            if (!result.success) {
+                                alert('云端删除失败：' + (result.message || '未知错误'));
+                                return;
+                            }
+                        } catch (e) {
+                            alert('云端删除失败：' + e.message);
+                            return;
+                        }
+                    } else {
+                        alert('当前离线，删除需要联网（云端 squirrel analysis/ 文件未删除）');
+                        return;
+                    }
                     listData.value = listData.value.filter(item => item.projNo !== row.projNo);
                     // 2026-08-15：同步更新 localStorage 缓存
                     lsCacheSet('qa_list', listData.value);
