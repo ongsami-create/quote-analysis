@@ -65,6 +65,16 @@
             font-size: 14px;
         }
 
+        /* 2026-08-16: Squirrel Care 品牌标识 */
+        .brand-mark {
+            height: 36px;
+            margin-right: 8px;
+            background: white;
+            border-radius: 6px;
+            padding: 4px 8px;
+            object-fit: contain;
+        }
+
         .title { font-size: 18px; font-weight: 600; }
 
         .header-right {
@@ -659,6 +669,7 @@
         <!-- Header -->
         <header class="header">
             <div class="header-left">
+                <img src="assets/squirrel-care.png" alt="Squirrel Care" class="brand-mark">
                 <div class="logo">QA</div>
                 <span class="title">Quote Analysis 报价分析</span>
                 <span v-if="syncQueueCount > 0" style="background: var(--warning); color: white; padding: 4px 10px; border-radius: 10px; font-size: 12px;">
