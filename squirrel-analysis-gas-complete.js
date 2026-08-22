@@ -1133,6 +1133,9 @@ function importQuoteToAnalysis(username, fileId) {
     raw.projNo = projNo;
     raw.lastModified = new Date().toISOString().split('T')[0];
     raw.status = raw.status || 'pending';
+    // 2026-08-22: 同时存 totalSales 字段 (Squirrel 原文件叫 total, 但 list 端读 totalSales)
+    // 这样 list 端不需要 fallback, 数据来源唯一
+    raw.totalSales = raw.total || raw.grandTotal || raw.totalSales || 0;
 
     // Save as check_{projNo}.json in squirrel analysis/
     const checkFileName = 'check_' + projNo + '.json';
@@ -1247,7 +1250,8 @@ function getCheckQuoteMeta(projNo) {
       meta: {
         projNo: data.projNo || projNo,
         customerName: data.customerName || data.customer?.name || '',
-        totalSales: data.totalSales || 0,
+        // 2026-08-22: 兼容 Squirrel 原始字段 (total/grandTotal) + 分析模板字段 (totalSales)
+        totalSales: data.total || data.grandTotal || data.totalSales || 0,
         totalCost: data.totalCost || 0,
         profit: data.profit || 0,
         profitPercent: data.profitPercent || 0,
@@ -1290,7 +1294,8 @@ function getCheckQuoteList() {
           quotes.push({
             projNo: data.projNo || name.replace('check_', '').replace('.json', ''),
             customerName: data.customerName || data.customer?.name || '',
-            totalSales: data.totalSales || 0,
+            // 2026-08-22: 兼容 Squirrel 原始字段 (total/grandTotal) + 分析模板字段 (totalSales)
+            totalSales: data.total || data.grandTotal || data.totalSales || 0,
             totalCost: data.totalCost || 0,
             profit: data.profit || 0,
             profitPercent: data.profitPercent || 0,
