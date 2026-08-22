@@ -535,6 +535,108 @@
             border: 1px solid rgba(255, 149, 0, 0.2);
         }
 
+        /* 2026-08-22: 导入弹窗新样式（多选、tag、进度、结果） */
+        .file-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .file-item-disabled { opacity: 0.55; cursor: not-allowed !important; }
+        .file-item-disabled:hover { background: white !important; transform: none !important; border-color: var(--border) !important; }
+        .file-checkbox {
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
+            accent-color: var(--secondary);
+            flex-shrink: 0;
+        }
+        .file-tag {
+            display: inline-block;
+            font-size: 10px;
+            font-weight: 600;
+            padding: 1px 6px;
+            border-radius: 4px;
+            margin-left: 6px;
+            vertical-align: middle;
+            letter-spacing: 0.02em;
+        }
+        .tag-imported { background: rgba(52, 199, 89, 0.14); color: #1f7a3a; }
+        .tag-lowdeposit { background: rgba(255, 149, 0, 0.14); color: #b36300; }
+
+        .import-progress {
+            margin-top: 16px;
+            padding: 12px;
+            background: rgba(0, 122, 255, 0.04);
+            border-radius: 8px;
+            border: 1px solid rgba(0, 122, 255, 0.2);
+        }
+        .import-progress-text {
+            font-size: 13px;
+            color: var(--secondary);
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+        .import-progress-bar {
+            width: 100%;
+            height: 6px;
+            background: rgba(0, 122, 255, 0.12);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+        .import-progress-fill {
+            height: 100%;
+            background: var(--secondary);
+            border-radius: 3px;
+            transition: width 0.2s ease;
+        }
+
+        .import-result {
+            margin-top: 16px;
+            padding: 14px;
+            background: #fafafa;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+        }
+        .import-result-title {
+            font-weight: 600;
+            font-size: 14px;
+            margin-bottom: 8px;
+        }
+        .import-result-stats {
+            display: flex;
+            gap: 16px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .import-result-details {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+            max-height: 120px;
+            overflow-y: auto;
+        }
+        .import-result-row {
+            font-size: 12px;
+            color: #b8231c;
+            padding: 4px 0;
+        }
+
+        /* 2026-08-22: 列表批量操作栏 */
+        .batch-action-bar {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .batch-action-count {
+            font-size: 13px;
+            color: var(--secondary);
+            font-weight: 500;
+            padding: 4px 10px;
+            background: rgba(0, 122, 255, 0.08);
+            border-radius: 999px;
+        }
+
         /* Loading */
         .loading-overlay {
             position: fixed;
@@ -666,11 +768,26 @@
             <div class="data-table">
                 <div class="table-header">
                     <span class="table-title">报价列表 ({{ filteredList.length }} 项)</span>
+                    <!-- 2026-08-22: 批量操作栏（仅在选中项 > 0 时显示）-->
+                    <div v-if="selectedListIds.length > 0" class="batch-action-bar">
+                        <span class="batch-action-count">已选 <strong>{{ selectedListIds.length }}</strong> 项</span>
+                        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" @click="selectAllVisible" :disabled="selectedListIds.length >= filteredList.length">全选当前</button>
+                        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" @click="clearListSelection">清空选择</button>
+                        <button class="btn btn-success" style="padding: 4px 10px; font-size: 12px;" @click="batchMarkComplete('completed')" :disabled="listBatchActionPending">批量完成</button>
+                        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" @click="batchMarkComplete('pending')" :disabled="listBatchActionPending">取消完成</button>
+                        <button class="btn btn-danger" style="padding: 4px 10px; font-size: 12px;" @click="batchDelete" :disabled="listBatchActionPending">批量删除</button>
+                    </div>
                 </div>
 
                 <table>
                     <thead>
                         <tr>
+                            <th style="width: 32px;">
+                                <input type="checkbox"
+                                    :checked="selectedListIds.length > 0 && selectedListIds.length === filteredList.length"
+                                    :indeterminate.prop="selectedListIds.length > 0 && selectedListIds.length < filteredList.length"
+                                    @change="selectedListIds.length === filteredList.length ? clearListSelection() : selectAllVisible()" />
+                            </th>
                             <th>ProjNo</th>
                             <th>客户</th>
                             <th class="text-right">总销售</th>
@@ -684,6 +801,11 @@
                     </thead>
                     <tbody>
                         <tr v-for="item in filteredList" :key="item.projNo" :class="{ 'warning-row': item.profitPercent < 25 }">
+                            <td>
+                                <input type="checkbox"
+                                    :checked="selectedListIds.includes(item.projNo)"
+                                    @change="toggleListSelect(item.projNo)" />
+                            </td>
                             <td><span class="link" @click="openEdit(item)">{{ item.projNo }}</span></td>
                             <td>{{ item.customerName }}</td>
                             <td class="text-right">RM {{ formatNumber(item.totalSales) }}</td>
@@ -702,7 +824,7 @@
                             </td>
                             <td>
                                 <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px;" @click="openEdit(item)">编辑</button>
-                                <button class="btn btn-success" style="padding: 4px 8px; font-size: 12px;" @click="markComplete(item)">
+                                <button class="btn btn-success" style="padding: 4px 8px; font-size: 12px;" @click="markComplete(item)" :title="item.status === 'completed' ? '点击取消完成（仅作审阅标记）' : '点击标记完成（仅作审阅标记）'">
                                     {{ item.status === 'completed' ? '取消' : '完成' }}
                                 </button>
                                 <button class="btn btn-danger" style="padding: 4px 8px; font-size: 12px;" @click="deleteProject(item)">删除</button>
@@ -738,16 +860,16 @@
         </main>
 
         <!-- Import Dialog -->
-        <div v-if="importDialogVisible" class="modal-overlay" @click.self="importDialogVisible = false">
+        <div v-if="importDialogVisible" class="modal-overlay" @click.self="closeImportDialog">
             <div class="modal">
                 <div class="modal-header">
                     <span class="modal-title">导入报价</span>
-                    <button class="modal-close" @click="importDialogVisible = false">×</button>
+                    <button class="modal-close" @click="closeImportDialog">×</button>
                 </div>
                 <div class="modal-body">
                     <div class="form-group" style="margin-bottom: 16px;">
                         <label class="form-label">选择用户文件夹</label>
-                        <select class="filter-select" v-model="importForm.selectedFolder" style="width: 100%;" :disabled="isLoading">
+                        <select class="filter-select" v-model="importForm.selectedFolder" style="width: 100%;" :disabled="importForm.importing">
                             <option value="">-- 请选择用户 --</option>
                             <option v-for="folder in availableFolders" :key="folder.name" :value="folder.name">{{ folder.name }}</option>
                         </select>
@@ -755,60 +877,87 @@
                         <div v-else-if="availableFolders.length === 0 && importForm.selectedFolder === ''" style="font-size: 12px; color: #e74c3c; margin-top: 4px;">⚠️ 无法加载用户列表，请检查网络或刷新页面重试</div>
                     </div>
 
+                    <!-- 2026-08-22: 状态条 + 过滤开关 -->
+                    <div v-if="importForm.selectedFolder && !importLoading" style="display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
+                        <div style="font-size: 13px; color: var(--subtext);">
+                            共 <strong>{{ stats.total }}</strong> 个文件，
+                            <span style="color: var(--success);"><strong>{{ stats.importable }}</strong> 个可导入</span>
+                            <span v-if="stats.alreadyImported > 0">，<span style="color: #b36300;">{{ stats.alreadyImported }} 个已存在</span></span>
+                            <span v-if="stats.lowDeposit > 0">，<span style="color: #b36300;">{{ stats.lowDeposit }} 个定金 &lt; 50%</span></span>
+                        </div>
+                        <label class="checkbox-wrapper" style="margin: 0;">
+                            <input type="checkbox" v-model="importForm.hideLowDeposit" />
+                            <span style="font-size: 12px;">隐藏定金 &lt; 50%</span>
+                        </label>
+                    </div>
+
+                    <!-- 2026-08-22: 多选文件列表 -->
                     <div class="form-group" style="margin-bottom: 20px;">
-                        <label class="form-label">选择报价文件</label>
+                        <label class="form-label">选择报价文件（可多选）</label>
+                        <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+                            <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" @click="selectAllImportable" :disabled="importForm.importing || importableFiles.length === 0">全选可导入</button>
+                            <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" @click="invertSelection" :disabled="importForm.importing">反选</button>
+                            <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" @click="clearSelection" :disabled="importForm.importing || selectedCount === 0">清空 ({{ selectedCount }})</button>
+                        </div>
                         <div class="file-list" v-if="importForm.selectedFolder">
                             <div v-if="importLoading" style="padding: 20px; text-align: center; color: #999;">加载中...</div>
-                            <div v-else-if="availableFiles.length === 0" style="padding: 20px; text-align: center; color: #e74c3c;">⚠️ 该文件夹暂无报价文件</div>
-                            <div v-for="file in availableFiles" :key="file.id"
-                                class="file-item"
-                                :class="{ selected: importForm.fileId === file.id }"
-                                @click="selectImportFile(file)">
-                                <div>
-                                    <div class="file-name">{{ file.name }}</div>
-                                    <div class="file-meta">{{ file.customerName || '-' }} · RM {{ formatNumber(file.totalSales) }} · {{ file.modifiedTime }}</div>
+                            <div v-else-if="visibleFiles.length === 0" style="padding: 20px; text-align: center; color: #e74c3c;">
+                                ⚠️ 没有可显示的报价文件
+                                <div v-if="stats.alreadyImported > 0 && stats.lowDeposit === 0" style="font-size: 12px; margin-top: 8px;">
+                                    所有 {{ stats.alreadyImported }} 个文件都已导入到系统中
                                 </div>
-                                <span v-if="importForm.fileId === file.id" style="color: var(--secondary);">✓</span>
+                            </div>
+                            <div v-for="file in visibleFiles" :key="file.id"
+                                class="file-item"
+                                :class="{ selected: importForm.selectedFileIds.includes(file.id), 'file-item-disabled': file._alreadyImported }"
+                                @click="!file._alreadyImported && toggleFileSelect(file)">
+                                <input type="checkbox" class="file-checkbox"
+                                    :checked="importForm.selectedFileIds.includes(file.id)"
+                                    :disabled="file._alreadyImported"
+                                    @click.stop="toggleFileSelect(file)" />
+                                <div style="flex: 1;">
+                                    <div class="file-name">
+                                        {{ file.projNo }}
+                                        <span v-if="file._alreadyImported" class="file-tag tag-imported">已导入</span>
+                                        <span v-else-if="file._lowDeposit" class="file-tag tag-lowdeposit">定金 {{ file.depositPercent.toFixed(0) }}%</span>
+                                    </div>
+                                    <div class="file-meta">
+                                        {{ file.customerName || '-' }} · RM {{ formatNumber(file.totalSales) }} · 定金 {{ file.depositPercent.toFixed(0) }}% · 欠款 RM {{ formatNumber(file.debtAmount) }}
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         <div v-else style="padding: 20px; text-align: center; color: #999;">请先选择用户文件夹</div>
                     </div>
 
-                    <div v-if="importForm.selectedFile" class="import-preview">
-                        <div class="import-preview-title">📄 预览选中的报价文件</div>
-                        <div class="import-preview-grid">
-                            <div class="import-preview-item">
-                                <span class="import-preview-label">ProjNo</span>
-                                <span class="import-preview-value">{{ importForm.selectedFile.name.replace('.json', '') }}</span>
-                            </div>
-                            <div class="import-preview-item">
-                                <span class="import-preview-label">客户</span>
-                                <span class="import-preview-value">{{ importForm.previewData.customerName || '-' }}</span>
-                            </div>
-                            <div class="import-preview-item">
-                                <span class="import-preview-label">总销售</span>
-                                <span class="import-preview-value">RM {{ formatNumber(importForm.previewData.totalSales || 0) }}</span>
-                            </div>
-                            <div class="import-preview-item">
-                                <span class="import-preview-label">欠账%</span>
-                                <span class="import-preview-value" :class="{ 'warning-badge': importForm.previewData.debtPercent > 30 }">
-                                    {{ (importForm.previewData.debtPercent || 0).toFixed(1) }}%
-                                </span>
-                            </div>
+                    <!-- 2026-08-22: 进度条 -->
+                    <div v-if="importForm.importing" class="import-progress">
+                        <div class="import-progress-text">正在导入 {{ importForm.importProgress.done }}/{{ importForm.importProgress.total }}...</div>
+                        <div class="import-progress-bar">
+                            <div class="import-progress-fill" :style="{ width: (importForm.importProgress.done / importForm.importProgress.total * 100) + '%' }"></div>
                         </div>
+                    </div>
 
-                        <div v-if="isAlreadyImported" class="import-warning">
-                            ⚠️ 该报价可能已导入过
-                            <label class="checkbox-wrapper">
-                                <input type="checkbox" v-model="importForm.overwrite" />
-                                <span>覆盖现有数据</span>
-                            </label>
+                    <!-- 2026-08-22: 导入结果 -->
+                    <div v-if="importForm.importResult" class="import-result">
+                        <div class="import-result-title">导入完成</div>
+                        <div class="import-result-stats">
+                            <span style="color: var(--success);">✓ 成功 {{ importForm.importResult.imported }}</span>
+                            <span v-if="importForm.importResult.skipped > 0" style="color: #b36300;">⏭ 跳过 {{ importForm.importResult.skipped }}</span>
+                            <span v-if="importForm.importResult.failed > 0" style="color: #b8231c;">✗ 失败 {{ importForm.importResult.failed }}</span>
+                        </div>
+                        <div v-if="importForm.importResult.failed > 0" class="import-result-details">
+                            <div v-for="r in importForm.importResult.details.filter(d => !d.success)" :key="r.fileId" class="import-result-row">
+                                {{ r.fileName || r.projNo }}: {{ r.message }}
+                            </div>
                         </div>
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-secondary" @click="importDialogVisible = false">取消</button>
-                    <button class="btn btn-primary" @click="confirmImport" :disabled="!importForm.fileId">确认导入</button>
+                    <button class="btn btn-secondary" @click="closeImportDialog">{{ importForm.importResult ? '完成' : '取消' }}</button>
+                    <button class="btn btn-primary" @click="confirmImportBatch" :disabled="selectedCount === 0 || importForm.importing" v-if="!importForm.importResult">
+                        导入选中 {{ selectedCount }} 个
+                    </button>
                 </div>
             </div>
         </div>
@@ -1428,25 +1577,61 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 });
 
                 // Import Dialog
+                // 2026-08-22: 多选 + 批量导入 + 跳过已存在 + 定金过滤 + 欠款显示
                 const importDialogVisible = ref(false);
-                const importForm = reactive({ fileId: '', selectedFile: null, overwrite: false, previewData: {}, selectedFolder: '' });
+                const importForm = reactive({
+                    selectedFolder: '',
+                    selectedFileIds: [],   // 多选 — 数组
+                    previewFile: null,     // 单个文件预览（点谁预览谁）
+                    hideLowDeposit: true,  // 默认隐藏定金 < 50% 的文件
+                    importing: false,      // 批量导入中
+                    importProgress: null,  // { done, total } 或 null
+                    importResult: null,    // { imported, skipped, failed, results }
+                });
                 const availableFiles = ref([]);
                 const availableFolders = ref([]);
-                const importLoading = ref(false); // separate loading for import dialog
+                const importLoading = ref(false);
 
-                // Watch folder selection — fires when user picks a different folder
-                watch(() => importForm.selectedFolder, (newFolder) => {
-                    console.log('[watch] selectedFolder changed to:', newFolder);
-                    onFolderChange();
+                // 2026-08-22: 已存在 projNo 集合（用于快速判定"已在系统中"）
+                const importedProjNos = computed(() => new Set(listData.value.map(q => q.projNo)));
+
+                // 2026-08-22: 过滤后的文件列表（前端过滤 deposit<50% 和已存在的不算可导入）
+                const filteredFiles = computed(() => {
+                    return availableFiles.value.map(f => {
+                        const projNo = f.projNo || f.name.replace('.json', '');
+                        const alreadyImported = importedProjNos.value.has(projNo);
+                        const lowDeposit = (f.depositPercent || 0) < 50;
+                        return { ...f, projNo, _alreadyImported: alreadyImported, _lowDeposit: lowDeposit };
+                    });
                 });
+
+                // 2026-08-22: 当前显示的列表（应用 hideLowDeposit 过滤）
+                const visibleFiles = computed(() => {
+                    if (!importForm.hideLowDeposit) return filteredFiles.value;
+                    return filteredFiles.value.filter(f => !f._lowDeposit);
+                });
+
+                // 2026-08-22: 可导入的（不是已存在）— 用于全选 + 统计
+                const importableFiles = computed(() => filteredFiles.value.filter(f => !f._alreadyImported));
+                const selectedCount = computed(() => importForm.selectedFileIds.length);
+                const stats = computed(() => ({
+                    total: filteredFiles.value.length,
+                    importable: importableFiles.value.length,
+                    alreadyImported: filteredFiles.value.filter(f => f._alreadyImported).length,
+                    lowDeposit: filteredFiles.value.filter(f => f._lowDeposit).length,
+                }));
+
+                // Watch folder selection
+                watch(() => importForm.selectedFolder, () => onFolderChange());
 
                 const onFolderChange = async () => {
                     if (!importForm.selectedFolder) { availableFiles.value = []; return; }
-                    importForm.fileId = '';
-                    importForm.selectedFile = null;
-                    importForm.previewData = {};
+                    importForm.selectedFileIds = [];
+                    importForm.previewFile = null;
+                    importForm.importResult = null;
+                    importForm.importProgress = null;
 
-                    // 2026-08-15 优化：先从 localStorage 立即显示（5min TTL per-folder）
+                    // 先从 localStorage 立即显示（5min TTL per-folder）
                     const cacheKey = 'qa_files_' + importForm.selectedFolder;
                     const cachedFiles = lsCacheGet(cacheKey);
                     if (cachedFiles && Array.isArray(cachedFiles)) {
@@ -1464,13 +1649,35 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                         }
                     } catch (e) {
                         console.error('[Import] list_user_quote_files error:', e);
-                        // 保留 localStorage 缓存
                     } finally {
                         importLoading.value = false;
                     }
                 };
 
-                const isAlreadyImported = computed(() => listData.value.some(item => item.projNo === (importForm.selectedFile?.name?.replace('.json', '') || '')));
+                // 2026-08-22: 多选 toggle — 点了 checkbox 切换；点 file-item 区域 = 单预览
+                const toggleFileSelect = (file) => {
+                    const idx = importForm.selectedFileIds.indexOf(file.id);
+                    if (idx >= 0) {
+                        importForm.selectedFileIds.splice(idx, 1);
+                    } else {
+                        importForm.selectedFileIds.push(file.id);
+                    }
+                    // 同时设预览（最后一个选中的预览）
+                    importForm.previewFile = file;
+                };
+
+                const selectAllImportable = () => {
+                    importForm.selectedFileIds = importableFiles.value.map(f => f.id);
+                };
+                const clearSelection = () => {
+                    importForm.selectedFileIds = [];
+                };
+                const invertSelection = () => {
+                    const current = new Set(importForm.selectedFileIds);
+                    importForm.selectedFileIds = importableFiles.value
+                        .filter(f => !current.has(f.id))
+                        .map(f => f.id);
+                };
 
                 const actualCostTotal = computed(() => editData.value ? editData.value.actualCost.entries.reduce((sum, entry) => sum + (entry.cost || 0) * 1.1, 0) : 0);
                 const designFeeTotal = computed(() => editData.value ? editData.value.designFee.entries.reduce((sum, entry) => sum + (entry.amount || 0), 0) : 0);
@@ -1643,18 +1850,6 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     }
                 };
 
-                const selectImportFile = async (file) => {
-                    // 2026-08-15 优化：不要每次都 read_user_quote_file 预览（5-10s 浪费）
-                    // list 阶段 GAS 已经返回了 customerName/totalSales，直接用
-                    importForm.fileId = file.id;
-                    importForm.selectedFile = file;
-                    importForm.previewData = {
-                        customerName: file.customerName || file.name.replace('.json', ''),
-                        totalSales: file.totalSales || 0,
-                        debtPercent: 0  // 没在 list 端点里，0 占位（import 时会用 raw 重新算）
-                    };
-                };
-
                 // Build a complete editData object from raw Squirrel JSON.
                 // Both template-friendly fields (customer/salesPerson/...) and
                 // raw fields (customerName/items/...) are populated.
@@ -1749,48 +1944,70 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     };
                 };
 
-                const confirmImport = async () => {
-                    if (!importForm.selectedFile) return;
-                    const projNo = importForm.selectedFile.name.replace('.json', '');
+                // 2026-08-22: 批量导入（多选 + 跳过已存在 + 进度条 + 结果报告）
+                const confirmImportBatch = async () => {
+                    if (importForm.selectedFileIds.length === 0) {
+                        alert('请至少选择一个文件');
+                        return;
+                    }
                     if (!navigator.onLine) {
                         alert('当前离线，导入需要联网');
                         return;
                     }
-                    isLoading.value = true;
+                    // 客户端预先过滤掉已存在的（服务端也会跳过，但这样不浪费 fileId）
+                    const toImport = importForm.selectedFileIds.filter(id => {
+                        const f = filteredFiles.value.find(x => x.id === id);
+                        return f && !f._alreadyImported;
+                    });
+                    if (toImport.length === 0) {
+                        alert('选中的文件都已在系统中');
+                        return;
+                    }
+                    importForm.importing = true;
+                    importForm.importProgress = { done: 0, total: toImport.length };
+                    importForm.importResult = null;
                     try {
-                        // Import directly to cloud as check_{projNo}.json (raw file is NOT modified)
-                        const result = await gasCall('import_quote_to_analysis', {
+                        // fileIds 走逗号分隔 query string（doGet 不能传数组）
+                        const result = await gasCall('batch_import_quotes', {
                             username: importForm.selectedFolder,
-                            fileId: importForm.selectedFile.id
+                            fileIds: toImport.join(',')
                         });
-                        if (result.success && result.data) {
-                            const raw = result.data;
-                            const newData = buildNewDataFromRaw(raw, projNo);
-                            const exists = listData.value.findIndex(item => item.projNo === projNo);
-                            if (exists >= 0 && !importForm.overwrite) {
-                                alert('该报价已存在，请选择覆盖或取消');
-                                return;
-                            }
-                            if (exists >= 0) {
-                                listData.value[exists] = newData;
-                            } else {
-                                listData.value.push(newData);
-                            }
-                            // 2026-08-15：同时更新 localStorage 缓存 + IDB
-                            lsCacheSet('qa_list', listData.value);
-                            await saveToLocal(listData.value);
-                            // 让 list 视图"立即"显示新数据
-                            importDialogVisible.value = false;
-                            // 静默 — 不弹 alert 阻塞（用户点了导入就是确认了）
-                            console.log('[import] success:', projNo);
+                        if (result.success) {
+                            importForm.importProgress = { done: toImport.length, total: toImport.length };
+                            importForm.importResult = {
+                                imported: result.imported || 0,
+                                skipped: result.skipped || 0,
+                                failed: result.failed || 0,
+                                total: result.total || toImport.length,
+                                details: result.results || []
+                            };
+                            // 重新拉一次 list，让 UI 立即显示新数据
+                            await syncFromCloud();
+                            // 清掉已选
+                            importForm.selectedFileIds = [];
                         } else {
-                            alert('导入失败：' + (result.message || '无法读取文件数据'));
+                            alert('批量导入失败：' + (result.message || '未知错误'));
                         }
                     } catch (e) {
-                        alert('导入失败：' + e.message);
+                        alert('批量导入失败：' + e.message);
                     } finally {
-                        isLoading.value = false;
+                        importForm.importing = false;
                     }
+                };
+
+                const closeImportDialog = () => {
+                    if (importForm.importing) {
+                        alert('导入进行中，请稍候...');
+                        return;
+                    }
+                    importDialogVisible.value = false;
+                    // 弹窗关闭后清结果（下次打开是干净状态）
+                    setTimeout(() => {
+                        importForm.importResult = null;
+                        importForm.importProgress = null;
+                        importForm.selectedFileIds = [];
+                        importForm.previewFile = null;
+                    }, 300);
                 };
 
                 const showExportDialog = (type) => {
@@ -1846,6 +2063,89 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 const updateCommission = (role) => {
                     if (!editData.value) return;
                     editData.value.commission[role].amount = editData.value.summary.totalSales * editData.value.commission[role].percent / 100;
+                };
+
+                // 2026-08-22: 列表批量操作（多选模式）
+                const selectedListIds = ref([]);   // projNo 数组
+                const listBatchActionPending = ref(false);
+
+                const toggleListSelect = (projNo) => {
+                    const idx = selectedListIds.value.indexOf(projNo);
+                    if (idx >= 0) selectedListIds.value.splice(idx, 1);
+                    else selectedListIds.value.push(projNo);
+                };
+                const selectAllVisible = () => {
+                    const visible = filteredList.value.map(i => i.projNo);
+                    const current = new Set(selectedListIds.value);
+                    selectedListIds.value = visible.filter(p => !current.has(p));
+                };
+                const clearListSelection = () => { selectedListIds.value = []; };
+
+                const batchMarkComplete = async (newStatus) => {
+                    if (selectedListIds.value.length === 0) return;
+                    const action = newStatus === 'completed' ? '完成' : '取消完成';
+                    if (!confirm(`确定要${action}选中的 ${selectedListIds.value.length} 个报价？`)) return;
+                    listBatchActionPending.value = true;
+                    try {
+                        const target = listData.value.filter(i => selectedListIds.value.includes(i.projNo));
+                        // 本地立即更新（乐观更新）
+                        for (const item of target) {
+                            item.status = newStatus;
+                        }
+                        lsCacheSet('qa_list', listData.value);
+                        await saveToLocal(listData.value);
+                        // 云端逐条同步
+                        if (navigator.onLine) {
+                            for (const item of target) {
+                                try {
+                                    await saveQuoteToLocal(item);
+                                    await gasCall('save_check_quote', {
+                                        projNo: item.projNo,
+                                        quoteData: clone(item)
+                                    }, 'POST');
+                                } catch (e) {
+                                    console.warn('[batchMarkComplete] cloud save failed for', item.projNo, e);
+                                }
+                            }
+                        }
+                        clearListSelection();
+                    } finally {
+                        listBatchActionPending.value = false;
+                    }
+                };
+
+                const batchDelete = async () => {
+                    if (selectedListIds.value.length === 0) return;
+                    if (!confirm(`确定要删除选中的 ${selectedListIds.value.length} 个报价？\n\n此操作会同时删除云端 squirrel analysis/ 文件，无法撤销。`)) return;
+                    if (!navigator.onLine) {
+                        alert('当前离线，批量删除需要联网');
+                        return;
+                    }
+                    listBatchActionPending.value = true;
+                    try {
+                        // 一次调用，批量删
+                        const result = await gasCall('batch_delete_check_quotes', {
+                            projNos: selectedListIds.value.join(',')
+                        });
+                        if (result.success) {
+                            listData.value = listData.value.filter(item => !selectedListIds.value.includes(item.projNo));
+                            lsCacheSet('qa_list', listData.value);
+                            await saveToLocal(listData.value);
+                            for (const projNo of selectedListIds.value) {
+                                await deleteQuoteFromLocal(projNo);
+                            }
+                            clearListSelection();
+                            if (result.failed > 0) {
+                                alert(`已删除 ${result.deleted} 个，${result.failed} 个失败`);
+                            }
+                        } else {
+                            alert('批量删除失败：' + (result.message || '未知错误'));
+                        }
+                    } catch (e) {
+                        alert('批量删除失败：' + e.message);
+                    } finally {
+                        listBatchActionPending.value = false;
+                    }
                 };
 
                 const markComplete = async (row) => {
@@ -1986,9 +2286,17 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 return {
                     isLoading, loadingText, isConnected, isOnline, syncQueueCount, listData, searchQuery, filterStatus, statusText,
                     importDialogVisible, importForm, availableFiles, availableFolders, importLoading, editDialogVisible, editData, sections,
-                    filteredList, summary, isAlreadyImported,
+                    filteredList, summary,
+                    // 2026-08-22: 导入弹窗新状态
+                    filteredFiles, visibleFiles, importableFiles, selectedCount, stats,
+                    toggleFileSelect, selectAllImportable, clearSelection, invertSelection,
+                    confirmImportBatch, closeImportDialog,
+                    // 2026-08-22: 列表批量操作
+                    selectedListIds, listBatchActionPending,
+                    toggleListSelect, selectAllVisible, clearListSelection,
+                    batchMarkComplete, batchDelete,
                     actualCostTotal, designFeeTotal, installFeeTotal, logisticsFeeTotal, commissionTotal, lossTotal, totalCost, netProfit, netProfitPercent,
-                    formatNumber, filterData, syncFromCloud, showImportDialog, selectImportFile, confirmImport, showExportDialog, openEdit, updateCommission, markComplete, deleteProject, saveProject,
+                    formatNumber, filterData, syncFromCloud, showImportDialog, showExportDialog, openEdit, updateCommission, markComplete, deleteProject, saveProject,
                     addCostEntry, removeCostEntry, addDesignEntry, removeDesignEntry, addInstallEntry, removeInstallEntry, addLogisticsEntry, removeLogisticsEntry, addLossEntry, removeLossEntry, logout
                 };
             }

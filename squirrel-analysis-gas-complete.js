@@ -1051,20 +1051,28 @@ function listUserQuoteFiles(username) {
       const name = file.getName();
       if (name.endsWith('.json') && !name.startsWith('final_') && !name.startsWith('shared_')) {
         // 2026-08-15 优化：list 端点不需要完整 items[]，但 customerName/total 必须有
-        // 用 getBlob() + parse 一次，只读全文（DriveApp 不支持部分读）
-        // 加速点：去掉空字段、避免无谓的 reduce
+        // 2026-08-22: 加 depositPercent / debtAmount 用于前端过滤和预览
         try {
           const data = JSON.parse(file.getBlob().getDataAsString());
+          const total = data.total || data.grandTotal || data.totalSales || 0;
+          const debtPercent = data.debtPercent || 0;
+          const debtAmount = total * debtPercent / 100;
+          const depositAmount = total - debtAmount;
+          const depositPercent = total > 0 ? (depositAmount / total * 100) : 0;
           fileList.push({
             id: file.getId(),
             name: name,
             projNo: data.projNo || name.replace('.json', ''),
             customerName: data.customerName || '',
-            totalSales: data.total || data.grandTotal || data.totalSales || 0,
+            totalSales: total,
+            debtPercent: debtPercent,
+            debtAmount: debtAmount,
+            depositPercent: depositPercent,
+            depositAmount: depositAmount,
             modifiedTime: file.getLastUpdated().toISOString()
           });
         } catch (e) {
-          fileList.push({ id: file.getId(), name: name, projNo: name.replace('.json', ''), customerName: '', totalSales: 0, modifiedTime: file.getLastUpdated().toISOString() });
+          fileList.push({ id: file.getId(), name: name, projNo: name.replace('.json', ''), customerName: '', totalSales: 0, debtPercent: 0, debtAmount: 0, depositPercent: 0, depositAmount: 0, modifiedTime: file.getLastUpdated().toISOString() });
         }
       }
     }
@@ -1153,6 +1161,99 @@ function importQuoteToAnalysis(username, fileId) {
     return { success: true, message: 'Imported as ' + checkFileName, projNo, data: raw };
   } catch (error) {
     return { success: false, message: 'importQuoteToAnalysis: ' + error.toString() };
+  }
+}
+
+/**
+ * 批量导入报价：一次处理多个 fileId，返回逐条结果
+ * action: batch_import_quotes
+ * @param username - 用户文件夹名
+ * @param fileIds - string[] 原 JSON 的 Drive 文件 ID 数组
+ * @returns { success, results: [{projNo, fileName, success, message}], imported, failed, skipped }
+ */
+function batchImportQuotes(username, fileIds) {
+  try {
+    initializeFolders();
+    if (!Array.isArray(fileIds) || fileIds.length === 0) {
+      return { success: false, message: 'fileIds 必须是非空数组' };
+    }
+    const results = [];
+    let imported = 0, failed = 0, skipped = 0;
+
+    for (const fileId of fileIds) {
+      try {
+        const file = DriveApp.getFileById(fileId);
+        const fileName = file.getName();
+        if (!fileName.endsWith('.json')) {
+          results.push({ fileId, fileName, projNo: '', success: false, message: 'Not a JSON file' });
+          failed++;
+          continue;
+        }
+        const projNo = fileName.replace('.json', '');
+        const checkFileName = 'check_' + projNo + '.json';
+        // 2026-08-22: 自动跳过已存在（per F 建议）— 不覆盖，不让用户操心
+        const existing = analysisFolder.getFilesByName(checkFileName);
+        if (existing.hasNext()) {
+          results.push({ fileId, fileName, projNo, success: true, skipped: true, message: '已在 Quote Analysis 中，已跳过' });
+          skipped++;
+          continue;
+        }
+        const raw = JSON.parse(file.getBlob().getDataAsString());
+        raw.projNo = projNo;
+        raw.lastModified = new Date().toISOString().split('T')[0];
+        raw.status = raw.status || 'pending';
+        raw.totalSales = raw.total || raw.grandTotal || raw.totalSales || 0;
+        analysisFolder.createFile(checkFileName, JSON.stringify(raw), 'application/json');
+        results.push({ fileId, fileName, projNo, success: true, skipped: false, message: '已导入' });
+        imported++;
+      } catch (e) {
+        results.push({ fileId, fileName: fileId, projNo: '', success: false, message: e.toString() });
+        failed++;
+      }
+    }
+
+    // 2026-08-22: 一次失效 list 缓存（不是每条都失效）
+    cacheRemove('qa_list_v1');
+
+    return { success: true, results, imported, failed, skipped, total: fileIds.length };
+  } catch (error) {
+    return { success: false, message: 'batchImportQuotes: ' + error.toString() };
+  }
+}
+
+/**
+ * 批量删除：一次处理多个 projNo
+ * action: batch_delete_check_quotes
+ * @param projNos - string[] 要删除的 projNo 数组
+ */
+function batchDeleteCheckQuotes(projNos) {
+  try {
+    initializeFolders();
+    if (!Array.isArray(projNos) || projNos.length === 0) {
+      return { success: false, message: 'projNos 必须是非空数组' };
+    }
+    let deleted = 0, failed = 0;
+    const results = [];
+    for (const projNo of projNos) {
+      try {
+        const checkFileName = 'check_' + projNo + '.json';
+        const files = analysisFolder.getFilesByName(checkFileName);
+        let found = false;
+        while (files.hasNext()) {
+          files.next().setTrashed(true);
+          found = true;
+        }
+        if (found) { deleted++; results.push({ projNo, success: true }); }
+        else { failed++; results.push({ projNo, success: false, message: '文件不存在' }); }
+      } catch (e) {
+        failed++;
+        results.push({ projNo, success: false, message: e.toString() });
+      }
+    }
+    cacheRemove('qa_list_v1');
+    return { success: true, deleted, failed, results };
+  } catch (error) {
+    return { success: false, message: 'batchDeleteCheckQuotes: ' + error.toString() };
   }
 }
 
@@ -1509,6 +1610,16 @@ function doGet(e) {
         break;
       case 'import_quote_to_analysis':
         result = importQuoteToAnalysis(e.parameter.username, e.parameter.fileId);
+        break;
+      case 'batch_import_quotes':
+        // 2026-08-22: 批量导入（fileIds 走逗号分隔 query string — GAS doGet 拿不到 array）
+        // 注意：URL 长度限制 ~8KB，30 个 fileId 应该够
+        const batchFileIds = e.parameter.fileIds ? e.parameter.fileIds.split(',').filter(Boolean) : [];
+        result = batchImportQuotes(e.parameter.username, batchFileIds);
+        break;
+      case 'batch_delete_check_quotes':
+        const batchDelProjNos = e.parameter.projNos ? e.parameter.projNos.split(',').filter(Boolean) : [];
+        result = batchDeleteCheckQuotes(batchDelProjNos);
         break;
       case 'save_check_quote':
         result = saveCheckQuote(e.parameter.projNo, JSON.parse(e.parameter.quoteData || '{}'));
