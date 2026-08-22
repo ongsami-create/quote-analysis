@@ -794,7 +794,6 @@
                             <th class="text-right">总成本</th>
                             <th class="text-right">总利润</th>
                             <th class="text-right">利润%</th>
-                            <th class="text-right">欠账%</th>
                             <th>状态</th>
                             <th>操作</th>
                         </tr>
@@ -816,7 +815,6 @@
                                     {{ (item.profitPercent ?? 0).toFixed(1) }}%
                                 </span>
                             </td>
-                            <td class="text-right">{{ item.debtPercent ? item.debtPercent.toFixed(1) + '%' : '-' }}</td>
                             <td>
                                 <span :class="['status-badge', 'status-' + item.status]">
                                     {{ statusText[item.status] }}
@@ -877,18 +875,14 @@
                         <div v-else-if="availableFolders.length === 0 && importForm.selectedFolder === ''" style="font-size: 12px; color: #e74c3c; margin-top: 4px;">⚠️ 无法加载用户列表，请检查网络或刷新页面重试</div>
                     </div>
 
-                    <!-- 2026-08-22: 状态条 + 过滤开关 -->
+                    <!-- 2026-08-22: 状态条 -->
                     <div v-if="importForm.selectedFolder && !importLoading" style="display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
                         <div style="font-size: 13px; color: var(--subtext);">
                             共 <strong>{{ stats.total }}</strong> 个文件，
                             <span style="color: var(--success);"><strong>{{ stats.importable }}</strong> 个可导入</span>
                             <span v-if="stats.alreadyImported > 0">，<span style="color: #b36300;">{{ stats.alreadyImported }} 个已存在</span></span>
-                            <span v-if="stats.lowDeposit > 0">，<span style="color: #b36300;">{{ stats.lowDeposit }} 个定金 &lt; 50%</span></span>
+                            <span v-if="stats.lowDeposit > 0" style="color: var(--subtext);">（{{ stats.lowDeposit }} 个定金 &lt; 50% 已隐藏）</span>
                         </div>
-                        <label class="checkbox-wrapper" style="margin: 0;">
-                            <input type="checkbox" v-model="importForm.hideLowDeposit" />
-                            <span style="font-size: 12px;">隐藏定金 &lt; 50%</span>
-                        </label>
                     </div>
 
                     <!-- 2026-08-22: 多选文件列表 -->
@@ -902,9 +896,12 @@
                         <div class="file-list" v-if="importForm.selectedFolder">
                             <div v-if="importLoading" style="padding: 20px; text-align: center; color: #999;">加载中...</div>
                             <div v-else-if="visibleFiles.length === 0" style="padding: 20px; text-align: center; color: #e74c3c;">
-                                ⚠️ 没有可显示的报价文件
-                                <div v-if="stats.alreadyImported > 0 && stats.lowDeposit === 0" style="font-size: 12px; margin-top: 8px;">
+                                ⚠️ 没有可导入的报价文件
+                                <div v-if="stats.alreadyImported > 0" style="font-size: 12px; margin-top: 8px; color: var(--subtext);">
                                     所有 {{ stats.alreadyImported }} 个文件都已导入到系统中
+                                </div>
+                                <div v-else-if="stats.total > 0" style="font-size: 12px; margin-top: 8px; color: var(--subtext);">
+                                    {{ stats.total }} 个文件因定金 &lt; 50% 已过滤
                                 </div>
                             </div>
                             <div v-for="file in visibleFiles" :key="file.id"
@@ -1577,25 +1574,25 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 });
 
                 // Import Dialog
-                // 2026-08-22: 多选 + 批量导入 + 跳过已存在 + 定金过滤 + 欠款显示
+                // 2026-08-22: 多选 + 批量导入 + 跳过已存在
+                // 2026-08-22: 定金 < 50% 直接过滤掉（不显示，不让用户选）
                 const importDialogVisible = ref(false);
                 const importForm = reactive({
                     selectedFolder: '',
-                    selectedFileIds: [],   // 多选 — 数组
-                    previewFile: null,     // 单个文件预览（点谁预览谁）
-                    hideLowDeposit: true,  // 默认隐藏定金 < 50% 的文件
-                    importing: false,      // 批量导入中
-                    importProgress: null,  // { done, total } 或 null
-                    importResult: null,    // { imported, skipped, failed, results }
+                    selectedFileIds: [],
+                    previewFile: null,
+                    importing: false,
+                    importProgress: null,
+                    importResult: null,
                 });
                 const availableFiles = ref([]);
                 const availableFolders = ref([]);
                 const importLoading = ref(false);
 
-                // 2026-08-22: 已存在 projNo 集合（用于快速判定"已在系统中"）
+                // 2026-08-22: 已存在 projNo 集合
                 const importedProjNos = computed(() => new Set(listData.value.map(q => q.projNo)));
 
-                // 2026-08-22: 过滤后的文件列表（前端过滤 deposit<50% 和已存在的不算可导入）
+                // 2026-08-22: 过滤后的文件列表（前端过滤：已存在 + 定金 < 50% 直接不出现）
                 const filteredFiles = computed(() => {
                     return availableFiles.value.map(f => {
                         const projNo = f.projNo || f.name.replace('.json', '');
@@ -1605,10 +1602,9 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     });
                 });
 
-                // 2026-08-22: 当前显示的列表（应用 hideLowDeposit 过滤）
+                // 2026-08-22: 当前显示的列表（直接过滤掉低定金和已存在的，不让选）
                 const visibleFiles = computed(() => {
-                    if (!importForm.hideLowDeposit) return filteredFiles.value;
-                    return filteredFiles.value.filter(f => !f._lowDeposit);
+                    return filteredFiles.value.filter(f => !f._alreadyImported && !f._lowDeposit);
                 });
 
                 // 2026-08-22: 可导入的（不是已存在）— 用于全选 + 统计
