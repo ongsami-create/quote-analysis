@@ -637,6 +637,61 @@
             border-radius: 999px;
         }
 
+        /* 2026-08-23: Excel 式列头排序 + 筛选行 */
+        th.sortable {
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.15s ease;
+        }
+        th.sortable:hover { background: #f0f0f0; }
+        th.sortable.active { color: var(--secondary); background: rgba(0, 122, 255, 0.06); }
+        .sort-icon {
+            display: inline-block;
+            margin-left: 4px;
+            font-size: 10px;
+            opacity: 0.9;
+            width: 8px;
+        }
+        .filter-row th {
+            padding: 6px 8px;
+            background: #fafafa;
+            border-top: 1px solid var(--border);
+        }
+        .filter-row input,
+        .filter-row select {
+            width: 100%;
+            padding: 4px 6px;
+            border: 1px solid var(--border-strong);
+            border-radius: 5px;
+            font-size: 11px;
+            background: white;
+            color: var(--text);
+            font-family: inherit;
+        }
+        .filter-row input:focus,
+        .filter-row select:focus {
+            outline: none;
+            border-color: var(--secondary);
+            box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.1);
+        }
+        .filter-row input[type="number"] { font-size: 11px; }
+        .filter-num-pair {
+            display: flex;
+            gap: 2px;
+        }
+        .filter-num-pair input { width: 50%; min-width: 0; }
+        .filter-clear-btn {
+            padding: 4px 10px;
+            background: rgba(0, 122, 255, 0.08);
+            color: var(--secondary);
+            border: none;
+            border-radius: 5px;
+            font-size: 11px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        .filter-clear-btn:hover { background: rgba(0, 122, 255, 0.15); }
+
         /* Loading */
         .loading-overlay {
             position: fixed;
@@ -767,11 +822,11 @@
             <!-- Data Table -->
             <div class="data-table">
                 <div class="table-header">
-                    <span class="table-title">报价列表 ({{ filteredList.length }} 项)</span>
+                    <span class="table-title">报价列表 ({{ sortedFilteredList.length }} 项<span v-if="hasActiveFilters"> / 共 {{ filteredList.length }} 项</span>)</span>
                     <!-- 2026-08-22: 批量操作栏（仅在选中项 > 0 时显示）-->
                     <div v-if="selectedListIds.length > 0" class="batch-action-bar">
                         <span class="batch-action-count">已选 <strong>{{ selectedListIds.length }}</strong> 项</span>
-                        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" @click="selectAllVisible" :disabled="selectedListIds.length >= filteredList.length">全选当前</button>
+                        <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" @click="selectedListIds = sortedFilteredList.map(i => i.projNo)">全选当前</button>
                         <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" @click="clearListSelection">清空选择</button>
                         <button class="btn btn-success" style="padding: 4px 10px; font-size: 12px;" @click="batchMarkComplete('completed')" :disabled="listBatchActionPending">批量完成</button>
                         <button class="btn btn-secondary" style="padding: 4px 10px; font-size: 12px;" @click="batchMarkComplete('pending')" :disabled="listBatchActionPending">取消完成</button>
@@ -784,22 +839,70 @@
                         <tr>
                             <th style="width: 32px;">
                                 <input type="checkbox"
-                                    :checked="selectedListIds.length > 0 && selectedListIds.length === filteredList.length"
-                                    :indeterminate.prop="selectedListIds.length > 0 && selectedListIds.length < filteredList.length"
-                                    @change="selectedListIds.length === filteredList.length ? clearListSelection() : selectAllVisible()" />
+                                    :checked="selectedListIds.length > 0 && selectedListIds.length === sortedFilteredList.length"
+                                    :indeterminate.prop="selectedListIds.length > 0 && selectedListIds.length < sortedFilteredList.length"
+                                    @change="selectedListIds.length === sortedFilteredList.length ? clearListSelection() : selectedListIds = sortedFilteredList.map(i => i.projNo)" />
                             </th>
-                            <th>ProjNo</th>
-                            <th>客户</th>
-                            <th class="text-right">总销售</th>
-                            <th class="text-right">总成本</th>
-                            <th class="text-right">总利润</th>
-                            <th class="text-right">利润%</th>
-                            <th>状态</th>
+                            <th class="sortable" :class="{ active: sortKey === 'projNo' }" @click="toggleSort('projNo')">
+                                ProjNo<span class="sort-icon">{{ sortKey === 'projNo' ? (sortDir === 'asc' ? '▲' : '▼') : '' }}</span>
+                            </th>
+                            <th class="sortable" :class="{ active: sortKey === 'customerName' }" @click="toggleSort('customerName')">
+                                客户<span class="sort-icon">{{ sortKey === 'customerName' ? (sortDir === 'asc' ? '▲' : '▼') : '' }}</span>
+                            </th>
+                            <th class="text-right sortable" :class="{ active: sortKey === 'totalSales' }" @click="toggleSort('totalSales')">
+                                总销售<span class="sort-icon">{{ sortKey === 'totalSales' ? (sortDir === 'asc' ? '▲' : '▼') : '' }}</span>
+                            </th>
+                            <th class="text-right sortable" :class="{ active: sortKey === 'totalCost' }" @click="toggleSort('totalCost')">
+                                总成本<span class="sort-icon">{{ sortKey === 'totalCost' ? (sortDir === 'asc' ? '▲' : '▼') : '' }}</span>
+                            </th>
+                            <th class="text-right sortable" :class="{ active: sortKey === 'profit' }" @click="toggleSort('profit')">
+                                总利润<span class="sort-icon">{{ sortKey === 'profit' ? (sortDir === 'asc' ? '▲' : '▼') : '' }}</span>
+                            </th>
+                            <th class="text-right sortable" :class="{ active: sortKey === 'profitPercent' }" @click="toggleSort('profitPercent')">
+                                利润%<span class="sort-icon">{{ sortKey === 'profitPercent' ? (sortDir === 'asc' ? '▲' : '▼') : '' }}</span>
+                            </th>
+                            <th class="sortable" :class="{ active: sortKey === 'status' }" @click="toggleSort('status')">
+                                状态<span class="sort-icon">{{ sortKey === 'status' ? (sortDir === 'asc' ? '▲' : '▼') : '' }}</span>
+                            </th>
                             <th>操作</th>
+                        </tr>
+                        <tr class="filter-row">
+                            <th></th>
+                            <th><input v-model="columnFilters.projNo" placeholder="🔍" /></th>
+                            <th><input v-model="columnFilters.customerName" placeholder="🔍" /></th>
+                            <th>
+                                <div class="filter-num-pair">
+                                    <input v-model="columnFilters.minTotal" type="number" placeholder="≥" title="最小总销售" />
+                                    <input v-model="columnFilters.maxTotal" type="number" placeholder="≤" title="最大总销售" />
+                                </div>
+                            </th>
+                            <th>
+                                <div class="filter-num-pair">
+                                    <input v-model="columnFilters.minProfit" type="number" placeholder="≥" title="最小总利润" />
+                                    <input v-model="columnFilters.maxProfit" type="number" placeholder="≤" title="最大总利润" />
+                                </div>
+                            </th>
+                            <th>
+                                <div class="filter-num-pair">
+                                    <input v-model="columnFilters.minProfitPercent" type="number" placeholder="≥" title="最小利润率" />
+                                    <input v-model="columnFilters.maxProfitPercent" type="number" placeholder="≤" title="最大利润率" />
+                                </div>
+                            </th>
+                            <th>
+                                <select v-model="columnFilters.status">
+                                    <option value="">全部</option>
+                                    <option value="pending">进行中</option>
+                                    <option value="completed">已完成</option>
+                                    <option value="warning">预警</option>
+                                </select>
+                            </th>
+                            <th>
+                                <button v-if="hasActiveFilters" class="filter-clear-btn" @click="clearAllFilters" title="清除所有筛选和排序">清除</button>
+                            </th>
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="item in filteredList" :key="item.projNo" :class="{ 'warning-row': item.profitPercent < 25 }">
+                        <tr v-for="item in sortedFilteredList" :key="item.projNo" :class="{ 'warning-row': item.profitPercent < 25 }">
                             <td>
                                 <input type="checkbox"
                                     :checked="selectedListIds.includes(item.projNo)"
@@ -1573,6 +1676,80 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     };
                 });
 
+                // 2026-08-23: Excel 式排序 + 列筛选
+                const sortKey = ref('');  // '' | 'projNo' | 'customerName' | 'totalSales' | 'totalCost' | 'profit' | 'profitPercent' | 'status'
+                const sortDir = ref('asc');  // 'asc' | 'desc'
+                const columnFilters = reactive({
+                    projNo: '',
+                    customerName: '',
+                    minTotal: '',
+                    maxTotal: '',
+                    minProfit: '',
+                    maxProfit: '',
+                    minProfitPercent: '',
+                    maxProfitPercent: '',
+                    status: ''
+                });
+
+                const toggleSort = (key) => {
+                    if (sortKey.value === key) {
+                        // 同一列：asc → desc → 清空
+                        if (sortDir.value === 'asc') sortDir.value = 'desc';
+                        else { sortKey.value = ''; sortDir.value = 'asc'; }
+                    } else {
+                        sortKey.value = key;
+                        sortDir.value = 'asc';
+                    }
+                };
+
+                const clearAllFilters = () => {
+                    searchQuery.value = '';
+                    filterStatus.value = '';
+                    columnFilters.projNo = '';
+                    columnFilters.customerName = '';
+                    columnFilters.minTotal = '';
+                    columnFilters.maxTotal = '';
+                    columnFilters.minProfit = '';
+                    columnFilters.maxProfit = '';
+                    columnFilters.minProfitPercent = '';
+                    columnFilters.maxProfitPercent = '';
+                    columnFilters.status = '';
+                    sortKey.value = '';
+                };
+
+                // 2026-08-23: 应用列筛选 + 排序（用 filteredList 作为基础）
+                const sortedFilteredList = computed(() => {
+                    let result = [...filteredList.value];
+                    // 列筛选
+                    const f = columnFilters;
+                    if (f.projNo) result = result.filter(i => (i.projNo || '').toLowerCase().includes(f.projNo.toLowerCase()));
+                    if (f.customerName) result = result.filter(i => (i.customerName || '').toLowerCase().includes(f.customerName.toLowerCase()));
+                    if (f.minTotal) result = result.filter(i => (i.totalSales || 0) >= Number(f.minTotal));
+                    if (f.maxTotal) result = result.filter(i => (i.totalSales || 0) <= Number(f.maxTotal));
+                    if (f.minProfit) result = result.filter(i => (i.profit || 0) >= Number(f.minProfit));
+                    if (f.maxProfit) result = result.filter(i => (i.profit || 0) <= Number(f.maxProfit));
+                    if (f.minProfitPercent) result = result.filter(i => (i.profitPercent || 0) >= Number(f.minProfitPercent));
+                    if (f.maxProfitPercent) result = result.filter(i => (i.profitPercent || 0) <= Number(f.maxProfitPercent));
+                    if (f.status) result = result.filter(i => i.status === f.status);
+                    // 排序
+                    if (sortKey.value) {
+                        const k = sortKey.value;
+                        const dir = sortDir.value === 'asc' ? 1 : -1;
+                        result = result.slice().sort((a, b) => {
+                            const av = a[k];
+                            const bv = b[k];
+                            if (typeof av === 'number' && typeof bv === 'number') return (av - bv) * dir;
+                            return String(av ?? '').localeCompare(String(bv ?? ''), undefined, { numeric: true }) * dir;
+                        });
+                    }
+                    return result;
+                });
+
+                const hasActiveFilters = computed(() => {
+                    return !!(searchQuery.value || filterStatus.value ||
+                        Object.values(columnFilters).some(v => v !== ''));
+                });
+
                 // Import Dialog
                 // 2026-08-22: 多选 + 批量导入 + 跳过已存在
                 // 2026-08-22: 定金 < 50% 直接过滤掉（不显示，不让用户选）
@@ -2292,6 +2469,8 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     toggleListSelect, selectAllVisible, clearListSelection,
                     batchMarkComplete, batchDelete,
                     actualCostTotal, designFeeTotal, installFeeTotal, logisticsFeeTotal, commissionTotal, lossTotal, totalCost, netProfit, netProfitPercent,
+                    // 2026-08-23: Excel 式排序 + 筛选
+                    sortKey, sortDir, columnFilters, sortedFilteredList, hasActiveFilters, toggleSort, clearAllFilters,
                     formatNumber, filterData, syncFromCloud, showImportDialog, showExportDialog, openEdit, updateCommission, markComplete, deleteProject, saveProject,
                     addCostEntry, removeCostEntry, addDesignEntry, removeDesignEntry, addInstallEntry, removeInstallEntry, addLogisticsEntry, removeLogisticsEntry, addLossEntry, removeLossEntry, logout
                 };

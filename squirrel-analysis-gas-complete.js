@@ -1052,13 +1052,34 @@ function listUserQuoteFiles(username) {
       if (name.endsWith('.json') && !name.startsWith('final_') && !name.startsWith('shared_')) {
         // 2026-08-15 优化：list 端点不需要完整 items[]，但 customerName/total 必须有
         // 2026-08-22: 加 depositPercent / debtAmount 用于前端过滤和预览
+        // 2026-08-23: 修正定金计算 — 不依赖 debtPercent（很多 Squirrel 文件没填，默认 0 导致显示 100%）
+        //             优先读 depositTotal / deposits 数组，没有则 fallback debtPercent
         try {
           const data = JSON.parse(file.getBlob().getDataAsString());
           const total = data.total || data.grandTotal || data.totalSales || 0;
-          const debtPercent = data.debtPercent || 0;
-          const debtAmount = total * debtPercent / 100;
-          const depositAmount = total - debtAmount;
-          const depositPercent = total > 0 ? (depositAmount / total * 100) : 0;
+          // 计算 depositAmount — 多种来源
+          let depositAmount = 0;
+          if (typeof data.depositTotal === 'number' && data.depositTotal > 0) {
+            depositAmount = data.depositTotal;
+          } else if (Array.isArray(data.deposits) && data.deposits.length > 0) {
+            depositAmount = data.deposits.reduce((s, d) => s + (d.amount || d.depositAmount || 0), 0);
+          } else if (typeof data.paidAmount === 'number' && data.paidAmount > 0) {
+            depositAmount = data.paidAmount;
+          }
+          // 如果 debtPercent 显式设置且 > 0，用它（用户主动标记过）
+          let debtPercent, depositPercent, debtAmount;
+          if (typeof data.debtPercent === 'number' && data.debtPercent > 0 && depositAmount === 0) {
+            debtPercent = data.debtPercent;
+            debtAmount = total * debtPercent / 100;
+            depositAmount = total - debtAmount;
+            depositPercent = 100 - debtPercent;
+          } else {
+            // 用 depositAmount 算（更准确）
+            depositAmount = Math.min(depositAmount, total);
+            depositPercent = total > 0 ? (depositAmount / total * 100) : 0;
+            debtPercent = 100 - depositPercent;
+            debtAmount = total - depositAmount;
+          }
           fileList.push({
             id: file.getId(),
             name: name,
