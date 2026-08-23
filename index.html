@@ -637,60 +637,112 @@
             border-radius: 999px;
         }
 
-        /* 2026-08-23: Excel 式列头排序 + 筛选行 */
+        /* 2026-08-23: Excel 式排序 + 浮层筛选（参考 squirrelfinance） */
         th.sortable {
             cursor: pointer;
             user-select: none;
             transition: background 0.15s ease;
         }
-        th.sortable:hover { background: #f0f0f0; }
-        th.sortable.active { color: var(--secondary); background: rgba(0, 122, 255, 0.06); }
-        .sort-icon {
+        th.sortable:hover { background: rgba(0, 0, 0, 0.03); }
+        th .sort-arrow {
             display: inline-block;
             margin-left: 4px;
             font-size: 10px;
-            opacity: 0.9;
-            width: 8px;
+            opacity: 0.4;
         }
-        .filter-row th {
-            padding: 6px 8px;
-            background: #fafafa;
-            border-top: 1px solid var(--border);
+        th.sorted .sort-arrow { opacity: 1; color: var(--secondary); }
+
+        th .filter-btn {
+            display: inline-block;
+            margin-left: 4px;
+            padding: 1px 4px;
+            cursor: pointer;
+            opacity: 0.4;
+            font-size: 10px;
+            border-radius: 3px;
+            transition: all 0.15s ease;
         }
-        .filter-row input,
-        .filter-row select {
-            width: 100%;
-            padding: 4px 6px;
-            border: 1px solid var(--border-strong);
-            border-radius: 5px;
+        th .filter-btn:hover, th .filter-btn.active { opacity: 1; color: var(--secondary); background: rgba(0, 122, 255, 0.08); }
+
+        /* 筛选浮层（毛玻璃 macOS 风格） */
+        .filter-popover {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.95);
+            -webkit-backdrop-filter: saturate(180%) blur(20px);
+            backdrop-filter: saturate(180%) blur(20px);
+            border: 0.5px solid var(--border-strong);
+            border-radius: 10px;
+            box-shadow: var(--shadow-lg);
+            padding: 14px;
+            min-width: 220px;
+            max-height: 360px;
+            overflow-y: auto;
+            z-index: 50;
+        }
+        .filter-popover h4 {
             font-size: 11px;
+            color: var(--subtext);
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-weight: 600;
+        }
+        .filter-popover-input {
+            width: 100%;
+            padding: 8px 10px;
+            border: 1px solid var(--border-strong);
+            border-radius: 6px;
+            font-size: 13px;
             background: white;
             color: var(--text);
             font-family: inherit;
         }
-        .filter-row input:focus,
-        .filter-row select:focus {
+        .filter-popover-input:focus {
             outline: none;
             border-color: var(--secondary);
-            box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.1);
+            box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.12);
         }
-        .filter-row input[type="number"] { font-size: 11px; }
-        .filter-num-pair {
+        .filter-popover-num {
             display: flex;
-            gap: 2px;
+            gap: 6px;
         }
-        .filter-num-pair input { width: 50%; min-width: 0; }
-        .filter-clear-btn {
-            padding: 4px 10px;
-            background: rgba(0, 122, 255, 0.08);
-            color: var(--secondary);
-            border: none;
-            border-radius: 5px;
-            font-size: 11px;
+        .filter-popover-num input {
+            width: 50%;
+            padding: 8px 10px;
+            border: 1px solid var(--border-strong);
+            border-radius: 6px;
+            font-size: 13px;
+            background: white;
+            color: var(--text);
+            font-family: inherit;
+        }
+        .filter-popover-num input:focus {
+            outline: none;
+            border-color: var(--secondary);
+            box-shadow: 0 0 0 2px rgba(0, 122, 255, 0.12);
+        }
+        .filter-popover label {
+            display: flex;
+            align-items: center;
+            padding: 6px 8px;
             cursor: pointer;
-            font-weight: 500;
+            font-size: 13px;
+            border-radius: 6px;
+            transition: background 0.1s;
         }
-        .filter-clear-btn:hover { background: rgba(0, 122, 255, 0.15); }
+        .filter-popover label:hover { background: rgba(0, 122, 255, 0.08); }
+        .filter-popover input[type=checkbox] {
+            margin-right: 8px;
+            accent-color: var(--secondary);
+        }
+        .filter-popover-actions {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
 
         /* Loading */
         .loading-overlay {
@@ -843,62 +895,35 @@
                                     :indeterminate.prop="selectedListIds.length > 0 && selectedListIds.length < sortedFilteredList.length"
                                     @change="selectedListIds.length === sortedFilteredList.length ? clearListSelection() : selectedListIds = sortedFilteredList.map(i => i.projNo)" />
                             </th>
-                            <th class="sortable" :class="{ active: sortKey === 'projNo' }" @click="toggleSort('projNo')">
-                                ProjNo<span class="sort-icon">{{ sortKey === 'projNo' ? (sortDir === 'asc' ? '▲' : '▼') : '' }}</span>
+                            <th class="sortable" :class="{ sorted: sortKey === 'projNo' }" @click="toggleSort('projNo')">
+                                ProjNo<span class="sort-arrow">{{ sortArrow('projNo') }}</span>
+                                <span class="filter-btn" :class="{ active: hasFilter('projNo') }" @click.stop="openFilter('projNo', $event)" title="筛选 ProjNo">▼</span>
                             </th>
-                            <th class="sortable" :class="{ active: sortKey === 'customerName' }" @click="toggleSort('customerName')">
-                                客户<span class="sort-icon">{{ sortKey === 'customerName' ? (sortDir === 'asc' ? '▲' : '▼') : '' }}</span>
+                            <th class="sortable" :class="{ sorted: sortKey === 'customerName' }" @click="toggleSort('customerName')">
+                                客户<span class="sort-arrow">{{ sortArrow('customerName') }}</span>
+                                <span class="filter-btn" :class="{ active: hasFilter('customerName') }" @click.stop="openFilter('customerName', $event)" title="筛选客户">▼</span>
                             </th>
-                            <th class="text-right sortable" :class="{ active: sortKey === 'totalSales' }" @click="toggleSort('totalSales')">
-                                总销售<span class="sort-icon">{{ sortKey === 'totalSales' ? (sortDir === 'asc' ? '▲' : '▼') : '' }}</span>
+                            <th class="text-right sortable" :class="{ sorted: sortKey === 'totalSales' }" @click="toggleSort('totalSales')">
+                                总销售<span class="sort-arrow">{{ sortArrow('totalSales') }}</span>
+                                <span class="filter-btn" :class="{ active: hasFilter('totalSales') }" @click.stop="openFilter('totalSales', $event)" title="筛选总销售">▼</span>
                             </th>
-                            <th class="text-right sortable" :class="{ active: sortKey === 'totalCost' }" @click="toggleSort('totalCost')">
-                                总成本<span class="sort-icon">{{ sortKey === 'totalCost' ? (sortDir === 'asc' ? '▲' : '▼') : '' }}</span>
+                            <th class="text-right sortable" :class="{ sorted: sortKey === 'totalCost' }" @click="toggleSort('totalCost')">
+                                总成本<span class="sort-arrow">{{ sortArrow('totalCost') }}</span>
+                                <span class="filter-btn" :class="{ active: hasFilter('totalCost') }" @click.stop="openFilter('totalCost', $event)" title="筛选总成本">▼</span>
                             </th>
-                            <th class="text-right sortable" :class="{ active: sortKey === 'profit' }" @click="toggleSort('profit')">
-                                总利润<span class="sort-icon">{{ sortKey === 'profit' ? (sortDir === 'asc' ? '▲' : '▼') : '' }}</span>
+                            <th class="text-right sortable" :class="{ sorted: sortKey === 'profit' }" @click="toggleSort('profit')">
+                                总利润<span class="sort-arrow">{{ sortArrow('profit') }}</span>
+                                <span class="filter-btn" :class="{ active: hasFilter('profit') }" @click.stop="openFilter('profit', $event)" title="筛选总利润">▼</span>
                             </th>
-                            <th class="text-right sortable" :class="{ active: sortKey === 'profitPercent' }" @click="toggleSort('profitPercent')">
-                                利润%<span class="sort-icon">{{ sortKey === 'profitPercent' ? (sortDir === 'asc' ? '▲' : '▼') : '' }}</span>
+                            <th class="text-right sortable" :class="{ sorted: sortKey === 'profitPercent' }" @click="toggleSort('profitPercent')">
+                                利润%<span class="sort-arrow">{{ sortArrow('profitPercent') }}</span>
+                                <span class="filter-btn" :class="{ active: hasFilter('profitPercent') }" @click.stop="openFilter('profitPercent', $event)" title="筛选利润%">▼</span>
                             </th>
-                            <th class="sortable" :class="{ active: sortKey === 'status' }" @click="toggleSort('status')">
-                                状态<span class="sort-icon">{{ sortKey === 'status' ? (sortDir === 'asc' ? '▲' : '▼') : '' }}</span>
+                            <th class="sortable" :class="{ sorted: sortKey === 'status' }" @click="toggleSort('status')">
+                                状态<span class="sort-arrow">{{ sortArrow('status') }}</span>
+                                <span class="filter-btn" :class="{ active: hasFilter('status') }" @click.stop="openFilter('status', $event)" title="筛选状态">▼</span>
                             </th>
                             <th>操作</th>
-                        </tr>
-                        <tr class="filter-row">
-                            <th></th>
-                            <th><input v-model="columnFilters.projNo" placeholder="🔍" /></th>
-                            <th><input v-model="columnFilters.customerName" placeholder="🔍" /></th>
-                            <th>
-                                <div class="filter-num-pair">
-                                    <input v-model="columnFilters.minTotal" type="number" placeholder="≥" title="最小总销售" />
-                                    <input v-model="columnFilters.maxTotal" type="number" placeholder="≤" title="最大总销售" />
-                                </div>
-                            </th>
-                            <th>
-                                <div class="filter-num-pair">
-                                    <input v-model="columnFilters.minProfit" type="number" placeholder="≥" title="最小总利润" />
-                                    <input v-model="columnFilters.maxProfit" type="number" placeholder="≤" title="最大总利润" />
-                                </div>
-                            </th>
-                            <th>
-                                <div class="filter-num-pair">
-                                    <input v-model="columnFilters.minProfitPercent" type="number" placeholder="≥" title="最小利润率" />
-                                    <input v-model="columnFilters.maxProfitPercent" type="number" placeholder="≤" title="最大利润率" />
-                                </div>
-                            </th>
-                            <th>
-                                <select v-model="columnFilters.status">
-                                    <option value="">全部</option>
-                                    <option value="pending">进行中</option>
-                                    <option value="completed">已完成</option>
-                                    <option value="warning">预警</option>
-                                </select>
-                            </th>
-                            <th>
-                                <button v-if="hasActiveFilters" class="filter-clear-btn" @click="clearAllFilters" title="清除所有筛选和排序">清除</button>
-                            </th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1059,6 +1084,39 @@
                         导入选中 {{ selectedCount }} 个
                     </button>
                 </div>
+            </div>
+        </div>
+
+        <!-- Filter Popover (Excel-style, like squirrelfinance) -->
+        <div v-if="activeFilter" class="filter-popover" :style="filterPopoverStyle" @click.stop>
+            <h4>筛选: {{ filterLabels[activeFilter] || activeFilter }}</h4>
+
+            <!-- 文本列：简单输入框 -->
+            <template v-if="filterTypes[activeFilter] === 'text'">
+                <input v-model="columnFilters[activeFilter]" class="filter-popover-input" :placeholder="'包含的 ' + (filterLabels[activeFilter] || activeFilter)" @keyup.enter="activeFilter = null" />
+            </template>
+
+            <!-- 数值列：min/max -->
+            <template v-else-if="filterTypes[activeFilter] === 'number'">
+                <div class="filter-popover-num">
+                    <input v-model="columnFilters[activeFilter + '_min']" type="number" placeholder="≥ 最小" />
+                    <input v-model="columnFilters[activeFilter + '_max']" type="number" placeholder="≤ 最大" />
+                </div>
+            </template>
+
+            <!-- 状态下拉：3 个 checkbox -->
+            <template v-else-if="activeFilter === 'status'">
+                <label v-for="opt in statusOptions" :key="opt.value">
+                    <input type="checkbox"
+                        :checked="columnFilters.status.includes(opt.value)"
+                        @change="toggleStatusFilter(opt.value)">
+                    {{ opt.label }}
+                </label>
+            </template>
+
+            <div class="filter-popover-actions">
+                <button class="btn btn-secondary" @click="activeFilter = null">关闭</button>
+                <button class="btn btn-secondary" @click="clearOneFilter(activeFilter)" v-if="hasFilter(activeFilter)">清除此项</button>
             </div>
         </div>
 
@@ -1676,61 +1734,130 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     };
                 });
 
-                // 2026-08-23: Excel 式排序 + 列筛选
-                const sortKey = ref('');  // '' | 'projNo' | 'customerName' | 'totalSales' | 'totalCost' | 'profit' | 'profitPercent' | 'status'
-                const sortDir = ref('asc');  // 'asc' | 'desc'
+                // 2026-08-23: Excel 式排序 + 列筛选（参考 squirrelfinance：列头点 ▼ 弹浮层）
+                const sortKey = ref('');
+                const sortDir = ref('desc');  // 默认 desc（squirrelfinance 的风格）
+
+                // 列筛选 — 用 columnFilters 存所有列的值
+                // status 是数组（多选），其他列是字符串 / min_max 数字
                 const columnFilters = reactive({
                     projNo: '',
                     customerName: '',
-                    minTotal: '',
-                    maxTotal: '',
-                    minProfit: '',
-                    maxProfit: '',
-                    minProfitPercent: '',
-                    maxProfitPercent: '',
-                    status: ''
+                    totalSales_min: '', totalSales_max: '',
+                    totalCost_min: '', totalCost_max: '',
+                    profit_min: '', profit_max: '',
+                    profitPercent_min: '', profitPercent_max: '',
+                    status: []  // 数组
                 });
 
+                // 筛选浮层
+                const activeFilter = ref('');  // 当前打开的列
+                const filterPopoverPos = ref({ x: 200, y: 200 });
+                const filterPopoverStyle = computed(() => ({
+                    top: filterPopoverPos.value.y + 'px',
+                    left: filterPopoverPos.value.x + 'px'
+                }));
+
+                // 每列的元数据
+                const filterLabels = {
+                    projNo: 'ProjNo',
+                    customerName: '客户',
+                    totalSales: '总销售',
+                    totalCost: '总成本',
+                    profit: '总利润',
+                    profitPercent: '利润%',
+                    status: '状态'
+                };
+                const filterTypes = {
+                    projNo: 'text',
+                    customerName: 'text',
+                    totalSales: 'number',
+                    totalCost: 'number',
+                    profit: 'number',
+                    profitPercent: 'number',
+                    status: 'status'
+                };
+                const statusOptions = [
+                    { value: 'pending', label: '进行中' },
+                    { value: 'completed', label: '已完成' },
+                    { value: 'warning', label: '预警' }
+                ];
+
+                const sortArrow = (key) => {
+                    if (sortKey.value !== key) return '↕';
+                    return sortDir.value === 'asc' ? '↑' : '↓';
+                };
                 const toggleSort = (key) => {
                     if (sortKey.value === key) {
-                        // 同一列：asc → desc → 清空
-                        if (sortDir.value === 'asc') sortDir.value = 'desc';
-                        else { sortKey.value = ''; sortDir.value = 'asc'; }
+                        sortDir.value = sortDir.value === 'asc' ? 'desc' : 'asc';
                     } else {
                         sortKey.value = key;
-                        sortDir.value = 'asc';
+                        sortDir.value = 'desc';
                     }
                 };
-
+                const openFilter = (key, ev) => {
+                    if (activeFilter.value === key) {
+                        activeFilter.value = '';
+                    } else {
+                        activeFilter.value = key;
+                        // 定位在点击的按钮下方
+                        const rect = ev.target.getBoundingClientRect();
+                        filterPopoverPos.value = {
+                            x: Math.min(rect.left, window.innerWidth - 260),
+                            y: rect.bottom + 4
+                        };
+                    }
+                };
+                const closeFilter = () => { activeFilter.value = ''; };
+                const hasFilter = (key) => {
+                    if (key === 'status') return columnFilters.status.length > 0;
+                    if (filterTypes[key] === 'number') {
+                        return columnFilters[key + '_min'] !== '' || columnFilters[key + '_max'] !== '';
+                    }
+                    return columnFilters[key] !== '';
+                };
+                const clearOneFilter = (key) => {
+                    if (key === 'status') columnFilters.status = [];
+                    else if (filterTypes[key] === 'number') {
+                        columnFilters[key + '_min'] = '';
+                        columnFilters[key + '_max'] = '';
+                    } else {
+                        columnFilters[key] = '';
+                    }
+                };
+                const toggleStatusFilter = (val) => {
+                    const idx = columnFilters.status.indexOf(val);
+                    if (idx >= 0) columnFilters.status.splice(idx, 1);
+                    else columnFilters.status.push(val);
+                };
                 const clearAllFilters = () => {
+                    Object.keys(columnFilters).forEach(k => {
+                        if (Array.isArray(columnFilters[k])) columnFilters[k] = [];
+                        else columnFilters[k] = '';
+                    });
+                    sortKey.value = '';
                     searchQuery.value = '';
                     filterStatus.value = '';
-                    columnFilters.projNo = '';
-                    columnFilters.customerName = '';
-                    columnFilters.minTotal = '';
-                    columnFilters.maxTotal = '';
-                    columnFilters.minProfit = '';
-                    columnFilters.maxProfit = '';
-                    columnFilters.minProfitPercent = '';
-                    columnFilters.maxProfitPercent = '';
-                    columnFilters.status = '';
-                    sortKey.value = '';
                 };
 
-                // 2026-08-23: 应用列筛选 + 排序（用 filteredList 作为基础）
+                // 2026-08-23: 应用列筛选 + 排序
                 const sortedFilteredList = computed(() => {
                     let result = [...filteredList.value];
-                    // 列筛选
                     const f = columnFilters;
+                    // 文本
                     if (f.projNo) result = result.filter(i => (i.projNo || '').toLowerCase().includes(f.projNo.toLowerCase()));
                     if (f.customerName) result = result.filter(i => (i.customerName || '').toLowerCase().includes(f.customerName.toLowerCase()));
-                    if (f.minTotal) result = result.filter(i => (i.totalSales || 0) >= Number(f.minTotal));
-                    if (f.maxTotal) result = result.filter(i => (i.totalSales || 0) <= Number(f.maxTotal));
-                    if (f.minProfit) result = result.filter(i => (i.profit || 0) >= Number(f.minProfit));
-                    if (f.maxProfit) result = result.filter(i => (i.profit || 0) <= Number(f.maxProfit));
-                    if (f.minProfitPercent) result = result.filter(i => (i.profitPercent || 0) >= Number(f.minProfitPercent));
-                    if (f.maxProfitPercent) result = result.filter(i => (i.profitPercent || 0) <= Number(f.maxProfitPercent));
-                    if (f.status) result = result.filter(i => i.status === f.status);
+                    // 数值（min/max）
+                    if (f.totalSales_min) result = result.filter(i => (i.totalSales || 0) >= Number(f.totalSales_min));
+                    if (f.totalSales_max) result = result.filter(i => (i.totalSales || 0) <= Number(f.totalSales_max));
+                    if (f.totalCost_min) result = result.filter(i => (i.totalCost || 0) >= Number(f.totalCost_min));
+                    if (f.totalCost_max) result = result.filter(i => (i.totalCost || 0) <= Number(f.totalCost_max));
+                    if (f.profit_min) result = result.filter(i => (i.profit || 0) >= Number(f.profit_min));
+                    if (f.profit_max) result = result.filter(i => (i.profit || 0) <= Number(f.profit_max));
+                    if (f.profitPercent_min) result = result.filter(i => (i.profitPercent || 0) >= Number(f.profitPercent_min));
+                    if (f.profitPercent_max) result = result.filter(i => (i.profitPercent || 0) <= Number(f.profitPercent_max));
+                    // 状态多选
+                    if (f.status.length > 0) result = result.filter(i => f.status.includes(i.status));
                     // 排序
                     if (sortKey.value) {
                         const k = sortKey.value;
@@ -1746,8 +1873,11 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 });
 
                 const hasActiveFilters = computed(() => {
-                    return !!(searchQuery.value || filterStatus.value ||
-                        Object.values(columnFilters).some(v => v !== ''));
+                    return !!(searchQuery.value || filterStatus.value || sortKey.value ||
+                        Object.entries(columnFilters).some(([k, v]) => {
+                            if (Array.isArray(v)) return v.length > 0;
+                            return v !== '';
+                        }));
                 });
 
                 // Import Dialog
@@ -2469,8 +2599,8 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     toggleListSelect, selectAllVisible, clearListSelection,
                     batchMarkComplete, batchDelete,
                     actualCostTotal, designFeeTotal, installFeeTotal, logisticsFeeTotal, commissionTotal, lossTotal, totalCost, netProfit, netProfitPercent,
-                    // 2026-08-23: Excel 式排序 + 筛选
-                    sortKey, sortDir, columnFilters, sortedFilteredList, hasActiveFilters, toggleSort, clearAllFilters,
+                    // 2026-08-23: Excel 式排序 + 浮层筛选
+                    sortKey, sortDir, columnFilters, sortedFilteredList, hasActiveFilters, sortArrow, toggleSort, openFilter, closeFilter, hasFilter, clearOneFilter, toggleStatusFilter, clearAllFilters, activeFilter, filterPopoverStyle, filterLabels, filterTypes, statusOptions,
                     formatNumber, filterData, syncFromCloud, showImportDialog, showExportDialog, openEdit, updateCommission, markComplete, deleteProject, saveProject,
                     addCostEntry, removeCostEntry, addDesignEntry, removeDesignEntry, addInstallEntry, removeInstallEntry, addLogisticsEntry, removeLogisticsEntry, addLossEntry, removeLossEntry, logout
                 };
