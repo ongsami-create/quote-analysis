@@ -1049,10 +1049,11 @@ function listUserQuoteFiles(username) {
     while (files.hasNext()) {
       const file = files.next();
       const name = file.getName();
-      if (name.endsWith('.json') && !name.startsWith('final_') && !name.startsWith('shared_')) {
+      if (name.endsWith('.json') && !name.startsWith('final_') && !name.startsWith('shared_') && name !== 'stats_cache.json') {
         // 2026-08-15 优化：list 端点不需要完整 items[]，但 customerName/total 必须有
         // 2026-08-22: 加 depositPercent / debtAmount 用于前端过滤和预览
         // 2026-08-23: 修正定金计算 — Squirrel 用 depositRecords 数组（不是 deposits）
+        // 2026-08-23: 排除系统文件 stats_cache.json（非报价）
         try {
           const data = JSON.parse(file.getBlob().getDataAsString());
           const total = data.total || data.grandTotal || data.totalSales || 0;

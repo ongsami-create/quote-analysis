@@ -561,7 +561,7 @@
             letter-spacing: 0.02em;
         }
         .tag-imported { background: rgba(52, 199, 89, 0.14); color: #1f7a3a; }
-        .tag-lowdeposit { background: rgba(255, 149, 0, 0.14); color: #b36300; }
+        .tag-nodeposit { background: rgba(255, 59, 48, 0.12); color: #b8231c; }
 
         .import-progress {
             margin-top: 16px;
@@ -1003,13 +1003,13 @@
                         <div v-else-if="availableFolders.length === 0 && importForm.selectedFolder === ''" style="font-size: 12px; color: #e74c3c; margin-top: 4px;">⚠️ 无法加载用户列表，请检查网络或刷新页面重试</div>
                     </div>
 
-                    <!-- 2026-08-22: 状态条 -->
+                    <!-- 2026-08-23: 状态条 -->
                     <div v-if="importForm.selectedFolder && !importLoading" style="display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; flex-wrap: wrap;">
                         <div style="font-size: 13px; color: var(--subtext);">
                             共 <strong>{{ stats.total }}</strong> 个文件，
                             <span style="color: var(--success);"><strong>{{ stats.importable }}</strong> 个可导入</span>
                             <span v-if="stats.alreadyImported > 0">，<span style="color: #b36300;">{{ stats.alreadyImported }} 个已存在</span></span>
-                            <span v-if="stats.lowDeposit > 0" style="color: var(--subtext);">（{{ stats.lowDeposit }} 个定金 &lt; 50% 已隐藏）</span>
+                            <span v-if="stats.noDeposit > 0" style="color: var(--subtext);">（{{ stats.noDeposit }} 个定金 = 0% 已隐藏）</span>
                         </div>
                     </div>
 
@@ -1028,8 +1028,8 @@
                                 <div v-if="stats.alreadyImported > 0" style="font-size: 12px; margin-top: 8px; color: var(--subtext);">
                                     所有 {{ stats.alreadyImported }} 个文件都已导入到系统中
                                 </div>
-                                <div v-else-if="stats.total > 0" style="font-size: 12px; margin-top: 8px; color: var(--subtext);">
-                                    {{ stats.total }} 个文件因定金 &lt; 50% 已过滤
+                                <div v-else-if="stats.noDeposit > 0" style="font-size: 12px; margin-top: 8px; color: var(--subtext);">
+                                    {{ stats.noDeposit }} 个文件因定金 = 0% 已过滤
                                 </div>
                             </div>
                             <div v-for="file in visibleFiles" :key="file.id"
@@ -1044,7 +1044,7 @@
                                     <div class="file-name">
                                         {{ file.projNo }}
                                         <span v-if="file._alreadyImported" class="file-tag tag-imported">已导入</span>
-                                        <span v-else-if="file._lowDeposit" class="file-tag tag-lowdeposit">定金 {{ file.depositPercent.toFixed(0) }}%</span>
+                                        <span v-else-if="file._noDeposit" class="file-tag tag-nodeposit">定金 0%</span>
                                     </div>
                                     <div class="file-meta">
                                         {{ file.customerName || '-' }} · RM {{ formatNumber(file.totalSales) }} · 定金 {{ file.depositPercent.toFixed(0) }}% · 欠款 RM {{ formatNumber(file.debtAmount) }}
@@ -1899,29 +1899,30 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 // 2026-08-22: 已存在 projNo 集合
                 const importedProjNos = computed(() => new Set(listData.value.map(q => q.projNo)));
 
-                // 2026-08-22: 过滤后的文件列表（前端过滤：已存在 + 定金 < 50% 直接不出现）
+                // 2026-08-22: 过滤后的文件列表（前端过滤：已存在 + 定金 = 0% 直接不出现）
+                // 2026-08-23: 改 depositPercent === 0 触发（user: "过滤定金=0的"）
                 const filteredFiles = computed(() => {
                     return availableFiles.value.map(f => {
                         const projNo = f.projNo || f.name.replace('.json', '');
                         const alreadyImported = importedProjNos.value.has(projNo);
-                        const lowDeposit = (f.depositPercent || 0) < 50;
-                        return { ...f, projNo, _alreadyImported: alreadyImported, _lowDeposit: lowDeposit };
+                        const noDeposit = (f.depositPercent || 0) === 0;
+                        return { ...f, projNo, _alreadyImported: alreadyImported, _noDeposit: noDeposit };
                     });
                 });
 
-                // 2026-08-22: 当前显示的列表（直接过滤掉低定金和已存在的，不让选）
+                // 2026-08-22: 当前显示的列表（直接过滤掉零定金和已存在的，不让选）
                 const visibleFiles = computed(() => {
-                    return filteredFiles.value.filter(f => !f._alreadyImported && !f._lowDeposit);
+                    return filteredFiles.value.filter(f => !f._alreadyImported && !f._noDeposit);
                 });
 
                 // 2026-08-22: 可导入的（不是已存在）— 用于全选 + 统计
-                const importableFiles = computed(() => filteredFiles.value.filter(f => !f._alreadyImported));
+                const importableFiles = computed(() => filteredFiles.value.filter(f => !f._alreadyImported && !f._noDeposit));
                 const selectedCount = computed(() => importForm.selectedFileIds.length);
                 const stats = computed(() => ({
                     total: filteredFiles.value.length,
                     importable: importableFiles.value.length,
                     alreadyImported: filteredFiles.value.filter(f => f._alreadyImported).length,
-                    lowDeposit: filteredFiles.value.filter(f => f._lowDeposit).length,
+                    noDeposit: filteredFiles.value.filter(f => f._noDeposit).length,
                 }));
 
                 // Watch folder selection
