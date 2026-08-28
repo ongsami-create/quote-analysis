@@ -1501,8 +1501,8 @@
                     </div>
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-secondary" @click="editDialogVisible = false">取消</button>
-                    <button class="btn btn-primary" :disabled="!isOnline" :title="!isOnline ? '离线模式：编辑只读，请联网后保存' : ''" @click="saveProject">保存</button>
+                    <button class="btn btn-secondary" @click="editDialogVisible = false" :disabled="isSaving">取消</button>
+                    <button class="btn btn-primary" @click="saveProject" :disabled="isSaving">{{ isSaving ? '保存中...' : '保存' }}</button>
                 </div>
             </div>
         </div>
@@ -2496,43 +2496,85 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     await deleteQuoteFromLocal(row.projNo);
                 };
 
+                // 2026-08-28: 加 try/catch + isSaving 锁 + 离线时仍允许本地保存
+                const isSaving = ref(false);
                 const saveProject = async () => {
-                    if (!editData.value) return;
-                    // Offline: refuse to save (button should be disabled, but double-check)
-                    if (!navigator.onLine) {
-                        alert('当前离线，编辑为只读模式。请联网后再保存。');
+                    console.log('[saveProject] start, editData:', editData.value);
+                    if (!editData.value) {
+                        alert('编辑数据为空，请重新打开编辑');
                         return;
                     }
-                    editData.value.totalCost = totalCost.value;
-                    editData.value.profit = netProfit.value;
-                    editData.value.profitPercent = netProfitPercent.value;
-                    editData.value.lastModified = new Date().toISOString().split('T')[0];
-                    const index = listData.value.findIndex(item => item.projNo === editData.value.projNo);
-                    if (index >= 0) {
-                        listData.value[index] = clone(editData.value);
+                    if (isSaving.value) {
+                        console.warn('[saveProject] already saving, ignore double click');
+                        return;
                     }
-                    // 2026-08-15：同步更新 localStorage 缓存（让下次刷新立即看到新数据）
-                    lsCacheSet('qa_list', listData.value);
-                    await saveToLocal(listData.value);
-                    await saveQuoteToLocal(editData.value);
-
-                    // Save to squirrel analysis/check_{projNo}.json in cloud
+                    isSaving.value = true;
                     try {
-                        const payload = clone(editData.value);
-                        const result = await gasCall('save_check_quote', {
-                            projNo: editData.value.projNo,
-                            quoteData: payload
-                        }, 'POST');
-                        if (result.success) {
-                            // 后台静默更新 — 不弹 alert 阻塞 UI
-                            console.log('[save] cloud saved');
+                        editData.value.totalCost = totalCost.value;
+                        editData.value.profit = netProfit.value;
+                        editData.value.profitPercent = netProfitPercent.value;
+                        editData.value.lastModified = new Date().toISOString().split('T')[0];
+                        const projNo = editData.value.projNo;
+                        if (!projNo) {
+                            alert('projNo 为空，无法保存');
+                            return;
+                        }
+                        const index = listData.value.findIndex(item => item.projNo === projNo);
+                        if (index >= 0) {
+                            listData.value[index] = clone(editData.value);
                         } else {
-                            alert('云端保存失败：' + (result.message || '未知错误'));
+                            // 新增条目（理论上不应发生，openEdit 总是基于已存在条目）
+                            listData.value.push(clone(editData.value));
+                        }
+                        console.log('[saveProject] local update done, listData len:', listData.value.length);
+
+                        // 1. 先写本地（永远成功）
+                        lsCacheSet('qa_list', listData.value);
+                        await saveToLocal(listData.value);
+                        await saveQuoteToLocal(editData.value);
+                        console.log('[saveProject] local save OK');
+
+                        // 2. 尝试云端（失败也不阻塞）
+                        let cloudOk = false;
+                        let cloudMsg = '';
+                        if (navigator.onLine) {
+                            try {
+                                const payload = clone(editData.value);
+                                const result = await gasCall('save_check_quote', {
+                                    projNo: projNo,
+                                    quoteData: payload
+                                }, 'POST');
+                                console.log('[saveProject] cloud result:', result);
+                                if (result.success) {
+                                    cloudOk = true;
+                                } else {
+                                    cloudMsg = result.message || '未知错误';
+                                }
+                            } catch (e) {
+                                cloudMsg = e.message;
+                                console.error('[saveProject] cloud sync error:', e);
+                            }
+                        } else {
+                            cloudMsg = '当前离线（navigator.onLine=false）';
+                        }
+
+                        // 3. 关闭弹窗 + 反馈
+                        editDialogVisible.value = false;
+                        if (cloudOk) {
+                            // 成功 — 不弹 alert 阻塞
+                            console.log('[saveProject] saved to cloud + local');
+                        } else {
+                            // 本地存了，云端失败 — 告诉用户但仍关闭弹窗
+                            console.warn('[saveProject] local saved, cloud failed:', cloudMsg);
+                            alert('已保存到本地，云端同步失败（' + cloudMsg + '）\n\n联网后可手动重试保存。');
                         }
                     } catch (e) {
-                        alert('已保存到本地，云端同步失败（' + e.message + '）');
+                        // 任何未预料错误 — 弹 alert 让用户看到
+                        console.error('[saveProject] FATAL:', e);
+                        alert('保存失败：' + e.message);
+                    } finally {
+                        isSaving.value = false;
                     }
-                    editDialogVisible.value = false;
                 };
 
                 const addCostEntry = () => { editData.value.actualCost.entries.push({ date: new Date().toISOString().split('T')[0], supplier: '', cost: 0 }); sections.actualCost = false; };
@@ -2599,7 +2641,7 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     selectedListIds, listBatchActionPending,
                     toggleListSelect, selectAllVisible, clearListSelection,
                     batchMarkComplete, batchDelete,
-                    actualCostTotal, designFeeTotal, installFeeTotal, logisticsFeeTotal, commissionTotal, lossTotal, totalCost, netProfit, netProfitPercent,
+                    actualCostTotal, designFeeTotal, installFeeTotal, logisticsFeeTotal, commissionTotal, lossTotal, totalCost, netProfit, netProfitPercent, isSaving,
                     // 2026-08-23: Excel 式排序 + 浮层筛选
                     sortKey, sortDir, columnFilters, sortedFilteredList, hasActiveFilters, sortArrow, toggleSort, openFilter, closeFilter, hasFilter, clearOneFilter, toggleStatusFilter, clearAllFilters, activeFilter, filterPopoverStyle, filterLabels, filterTypes, statusOptions,
                     formatNumber, filterData, syncFromCloud, showImportDialog, showExportDialog, openEdit, updateCommission, markComplete, deleteProject, saveProject,
