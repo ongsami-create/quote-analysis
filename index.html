@@ -2000,8 +2000,10 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 // Methods
                 const formatNumber = (num) => (num ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-                // 2026-08-15 性能优化：使用 structuredClone（比 JSON.parse(JSON.stringify()) 快 5-10x）
-                const clone = (obj) => (typeof structuredClone === 'function' ? structuredClone(obj) : JSON.parse(JSON.stringify(obj)));
+                // 2026-08-28: 改用 JSON 方式 — structuredClone 对 Vue reactive Proxy 会失败
+                // (editData.value 是 ref 自动包装的 Proxy，里面有 Vue 内部 symbols)
+                // JSON.parse(JSON.stringify()) 走 JSON 序列化能穿透 Proxy 拿到纯数据
+                const clone = (obj) => JSON.parse(JSON.stringify(obj));
 
                 // 2026-08-15 性能优化：localStorage 缓存层（5min TTL，跨刷新保留）
                 // 解决 GAS 冷启动 5-10s 问题，重复访问立即返回
