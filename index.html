@@ -788,8 +788,11 @@
         .checkbox-wrapper { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
         .checkbox-wrapper input { width: 16px; height: 16px; accent-color: var(--secondary); }
 
-        /* 2026-08-31: 利润 < 15% 红色警告行 */
-        .warning-row { background-color: rgba(255, 59, 48, 0.07) !important; }
+        /* 2026-08-31: 利润两档颜色 — < 15% 红底白字, 15-25% 橙底白字 */
+        .profit-low-row { background-color: rgba(255, 59, 48, 0.07) !important; }
+        .profit-medium-row { background-color: rgba(255, 149, 0, 0.06) !important; }
+        .profit-low-badge { background: #FF3B30; color: white; }
+        .profit-medium-badge { background: #FF9500; color: white; }
 
         /* Responsive */
         @media (max-width: 768px) {
@@ -927,7 +930,10 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="item in sortedFilteredList" :key="item.projNo" :class="{ 'warning-row': item.profitPercent < 15 }">
+                        <tr v-for="item in sortedFilteredList" :key="item.projNo" :class="{
+                            'profit-low-row': item.profitPercent < 15,
+                            'profit-medium-row': item.profitPercent >= 15 && item.profitPercent < 25
+                        }">
                             <td>
                                 <input type="checkbox"
                                     :checked="selectedListIds.includes(item.projNo)"
@@ -939,7 +945,10 @@
                             <td class="text-right">RM {{ formatNumber(item.totalCost) }}</td>
                             <td class="text-right">RM {{ formatNumber(item.profit) }}</td>
                             <td class="text-right">
-                                <span :class="{ 'warning-badge': item.profitPercent < 15 }">
+                                <span :class="{
+                                    'profit-low-badge': item.profitPercent < 15,
+                                    'profit-medium-badge': item.profitPercent >= 15 && item.profitPercent < 25
+                                }">
                                     {{ (item.profitPercent ?? 0).toFixed(1) }}%
                                 </span>
                             </td>
@@ -1486,7 +1495,10 @@
                                         <div class="net-profit-label">总利润</div>
                                     </div>
                                     <div class="net-profit-item">
-                                        <div class="net-profit-value" :class="{ 'warning-badge': netProfitPercent < 15 }">
+                                        <div class="net-profit-value" :class="{
+                                            'profit-low-badge': netProfitPercent < 15,
+                                            'profit-medium-badge': netProfitPercent >= 15 && netProfitPercent < 25
+                                        }">
                                             {{ (netProfitPercent ?? 0).toFixed(1) }}%
                                         </div>
                                         <div class="net-profit-label">利润百分比</div>
