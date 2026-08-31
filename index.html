@@ -788,8 +788,8 @@
         .checkbox-wrapper { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
         .checkbox-wrapper input { width: 16px; height: 16px; accent-color: var(--secondary); }
 
-        /* Warning Row */
-        .warning-row { background-color: rgba(255, 149, 0, 0.06) !important; }
+        /* 2026-08-31: 利润 < 15% 红色警告行 */
+        .warning-row { background-color: rgba(255, 59, 48, 0.07) !important; }
 
         /* Responsive */
         @media (max-width: 768px) {
@@ -927,7 +927,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        <tr v-for="item in sortedFilteredList" :key="item.projNo" :class="{ 'warning-row': item.profitPercent < 25 }">
+                        <tr v-for="item in sortedFilteredList" :key="item.projNo" :class="{ 'warning-row': item.profitPercent < 15 }">
                             <td>
                                 <input type="checkbox"
                                     :checked="selectedListIds.includes(item.projNo)"
@@ -939,7 +939,7 @@
                             <td class="text-right">RM {{ formatNumber(item.totalCost) }}</td>
                             <td class="text-right">RM {{ formatNumber(item.profit) }}</td>
                             <td class="text-right">
-                                <span :class="{ 'warning-badge': item.profitPercent < 25 }">
+                                <span :class="{ 'warning-badge': item.profitPercent < 15 }">
                                     {{ (item.profitPercent ?? 0).toFixed(1) }}%
                                 </span>
                             </td>
@@ -1486,7 +1486,7 @@
                                         <div class="net-profit-label">总利润</div>
                                     </div>
                                     <div class="net-profit-item">
-                                        <div class="net-profit-value" :class="{ 'warning-badge': netProfitPercent < 25 }">
+                                        <div class="net-profit-value" :class="{ 'warning-badge': netProfitPercent < 15 }">
                                             {{ (netProfitPercent ?? 0).toFixed(1) }}%
                                         </div>
                                         <div class="net-profit-label">利润百分比</div>
