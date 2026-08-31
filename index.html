@@ -1724,13 +1724,15 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
 
                 const summary = computed(() => {
                     const items = filteredList.value;
+                    const totalSales = items.reduce((s, i) => s + (i.totalSales || 0), 0);
+                    const totalCost = items.reduce((s, i) => s + (i.totalCost || 0), 0);
+                    const profit = items.reduce((s, i) => s + (i.profit || 0), 0);
+                    // 2026-08-31: 改为整体利润率 = 总利润 / 总销售（不是各条利润率算术平均）
                     return {
-                        totalSales: items.reduce((s, i) => s + (i.totalSales || 0), 0),
-                        totalCost: items.reduce((s, i) => s + (i.totalCost || 0), 0),
-                        profit: items.reduce((s, i) => s + (i.profit || 0), 0),
-                        avgProfitPercent: items.length
-                            ? items.reduce((s, i) => s + (i.profitPercent || 0), 0) / items.length
-                            : 0
+                        totalSales,
+                        totalCost,
+                        profit,
+                        avgProfitPercent: totalSales > 0 ? (profit / totalSales * 100) : 0
                     };
                 });
 
