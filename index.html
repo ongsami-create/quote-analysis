@@ -2335,31 +2335,58 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 };
 
                 const openEdit = async (row) => {
-                    // Cloud is the source of truth. Fetch the latest check_{projNo}.json
+                    // 2026-09-15: 优先本地 IDB（一直有用户最新编辑），云端作为 fallback
+                    // 之前 bug: 云端无数据时（比如之前 structuredClone 保存失败），editData 全空
+                    const localCached = await getQuoteFromLocal(row.projNo);
+
                     if (!navigator.onLine) {
-                        // Offline: try local cache, but editing is read-only (save button disabled)
-                        const cached = await getQuoteFromLocal(row.projNo);
-                        if (!cached) {
+                        // 离线：只用本地
+                        if (!localCached) {
                             alert('离线且本地无缓存，无法编辑。请联网后重试。');
                             return;
                         }
-                        editData.value = clone(cached);
+                        editData.value = clone(localCached);
                     } else {
-                        try {
-                            const result = await gasCall('get_check_quote', { projNo: row.projNo });
-                            if (result.success && result.quote) {
-                                // Build full editData from the stored check_*.json (already in raw format with custom fields)
-                                const editObj = buildNewDataFromRaw(result.quote, row.projNo);
-                                editData.value = clone(editObj);
-                                // Cache for offline read-only access
-                                await saveQuoteToLocal(editData.value);
-                            } else {
-                                alert('加载报价详情失败：' + (result.message || '未知错误'));
-                                return;
+                        // 在线：本地有完整数据 → 用本地的（用户编辑过的话云端可能没保存成功）
+                        //          本地无数据 → 才从云端拉
+                        let usedSource = 'local';
+                        if (localCached && isCompleteData(localCached)) {
+                            editData.value = clone(localCached);
+                        } else {
+                            // 本地不完整或不存在 → 从云端拉
+                            try {
+                                const result = await gasCall('get_check_quote', { projNo: row.projNo });
+                                if (result.success && result.quote) {
+                                    const editObj = buildNewDataFromRaw(result.quote, row.projNo);
+                                    editData.value = clone(editObj);
+                                    usedSource = 'cloud';
+                                    // 缓存到本地（fallback 备用）
+                                    await saveQuoteToLocal(editData.value);
+                                } else {
+                                    // 云端也没有 → 用本地（哪怕不完整），至少给用户看
+                                    if (localCached) {
+                                        editData.value = clone(localCached);
+                                        usedSource = 'local-incomplete';
+                                    } else {
+                                        alert('加载报价详情失败：' + (result.message || '未知错误') + '\n\n该报价在云端和本地都找不到。');
+                                        return;
+                                    }
+                                }
+                            } catch (e) {
+                                // 云端报错 → fallback 到本地
+                                if (localCached) {
+                                    editData.value = clone(localCached);
+                                    usedSource = 'local-error-fallback';
+                                } else {
+                                    alert('加载报价详情失败：' + e.message);
+                                    return;
+                                }
                             }
-                        } catch (e) {
-                            alert('加载报价详情失败：' + e.message);
-                            return;
+                        }
+                        if (usedSource !== 'local') {
+                            console.log('[openEdit] projNo=' + row.projNo + ' source=' + usedSource);
+                        } else {
+                            console.log('[openEdit] projNo=' + row.projNo + ' source=local (完整本地缓存)');
                         }
                     }
 
@@ -2378,6 +2405,16 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     sections.loss = !(editData.value.loss?.entries?.length > 0);
 
                     editDialogVisible.value = true;
+                };
+
+                // 2026-09-15: 检查 editData 是否真有完整字段（不只 projNo 存在）
+                const isCompleteData = (d) => {
+                    if (!d) return false;
+                    // 必须至少有 customer.name + salesPerson.name + 至少 1 个 item
+                    const hasCustomer = d.customer && (d.customer.name || d.customer.phone);
+                    const hasSales = d.salesPerson && (d.salesPerson.name || d.salesPerson.phone);
+                    const hasItems = Array.isArray(d.items) && d.items.length > 0;
+                    return !!(hasCustomer && hasSales && hasItems);
                 };
 
                 const updateCommission = (role) => {
