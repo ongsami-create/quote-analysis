@@ -1614,6 +1614,42 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
             }
         }
 
+        // 2026-09-15: 只更新 status 字段，保留 IDB 里完整的 customer / salesPerson / items / summary / 等字段
+        // markComplete / batchMarkComplete 用，避免用摘要数据覆盖完整数据
+        async function mergeStatusIntoLocal(projNo, newStatus) {
+            if (!db || !projNo) return;
+            try {
+                const tx = db.transaction('quotes', 'readwrite');
+                const store = tx.objectStore('quotes');
+                const request = store.get(projNo);
+                request.onsuccess = () => {
+                    const existing = request.result;
+                    if (existing) {
+                        // 现有完整数据 → 只更新 status
+                        existing.status = newStatus;
+                        existing.lastModified = new Date().toISOString().split('T')[0];
+                        store.put(existing);
+                    } else {
+                        // IDB 没数据（只有 list 摘要）→ 创建一个最小条目，存 status
+                        // 真正的完整数据需要重新打开 edit 才会被拉回来
+                        const minimal = {
+                            projNo,
+                            status: newStatus,
+                            lastModified: new Date().toISOString().split('T')[0]
+                        };
+                        store.put(minimal);
+                    }
+                };
+                await new Promise((resolve, reject) => {
+                    tx.oncomplete = () => resolve();
+                    tx.onerror = () => reject(tx.error);
+                    tx.onabort = () => reject(tx.error);
+                });
+            } catch (e) {
+                console.error('[saveQuoteToLocal] failed:', e);
+            }
+        }
+
         async function deleteQuoteFromLocal(projNo) {
             if (!db) return null;
             const tx = db.transaction('quotes', 'readwrite');
@@ -2455,7 +2491,9 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                         if (navigator.onLine) {
                             for (const item of target) {
                                 try {
-                                    await saveQuoteToLocal(item);
+                                    // 2026-09-15: 不再用 saveQuoteToLocal(item) — item 是摘要，会覆盖完整数据
+                                    // 改用 mergeStatusIntoLocal — 只更新 status 字段
+                                    await mergeStatusIntoLocal(item.projNo, newStatus);
                                     await gasCall('save_check_quote', {
                                         projNo: item.projNo,
                                         quoteData: clone(item)
@@ -2510,7 +2548,9 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     // 2026-08-15：同步更新 localStorage 缓存
                     lsCacheSet('qa_list', listData.value);
                     await saveToLocal(listData.value);
-                    await saveQuoteToLocal(row);
+                    // 2026-09-15: 不再调用 saveQuoteToLocal(row) — row 是 listData 里的摘要，会用摘要覆盖 IDB 里完整的 editData
+                    // 改用 mergeStatusIntoLocal：只更新 status 字段，保留其他完整字段
+                    await mergeStatusIntoLocal(row.projNo, row.status);
                     // Sync completion state to squirrel analysis/ cloud folder
                     if (navigator.onLine) {
                         try {
