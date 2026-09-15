@@ -744,6 +744,82 @@
             justify-content: flex-end;
         }
 
+        /* 2026-09-15: 重新加载按钮 + 下拉菜单 — 数据丢失时手动恢复 */
+        .source-badge {
+            display: inline-block;
+            padding: 3px 10px;
+            font-size: 11px;
+            font-weight: 600;
+            border-radius: 12px;
+            margin-left: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.02em;
+        }
+        .source-local { background: rgba(48, 209, 88, 0.15); color: #1f7a3a; }
+        .source-cloud { background: rgba(0, 122, 255, 0.15); color: #007aff; }
+        .source-squirrel-original { background: rgba(255, 159, 10, 0.18); color: #b8761a; }
+        .source-local-incomplete, .source-local-error-fallback { background: rgba(255, 59, 48, 0.15); color: #d32f2a; }
+        .source-unknown { background: rgba(0, 0, 0, 0.08); color: var(--subtext); }
+
+        .reload-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+        .reload-menu {
+            position: absolute;
+            bottom: calc(100% + 8px);
+            right: 0;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+            min-width: 280px;
+            z-index: 60;
+            overflow: hidden;
+        }
+        .reload-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 14px;
+            cursor: pointer;
+            transition: background 0.15s;
+            border-bottom: 1px solid var(--border);
+        }
+        .reload-menu-item:last-child { border-bottom: none; }
+        .reload-menu-item:hover { background: rgba(0, 122, 255, 0.08); }
+        .reload-menu-icon { font-size: 20px; flex-shrink: 0; }
+        .reload-menu-text { flex: 1; min-width: 0; }
+        .reload-menu-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+        .reload-menu-desc { font-size: 11px; color: var(--subtext); }
+
+        .folder-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+            gap: 8px;
+            max-height: 260px;
+            overflow-y: auto;
+        }
+        .folder-item {
+            padding: 10px 12px;
+            background: rgba(0, 0, 0, 0.04);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            text-align: center;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.15s;
+        }
+        .folder-item:hover { background: rgba(0, 122, 255, 0.08); border-color: var(--secondary); }
+        .folder-item.active {
+            background: var(--secondary);
+            color: white;
+            border-color: var(--secondary);
+        }
+
         /* Loading */
         .loading-overlay {
             position: fixed;
@@ -1134,6 +1210,14 @@
             <div class="modal">
                 <div class="modal-header">
                     <span class="modal-title">编辑报价: {{ editData?.projNo }}</span>
+                    <!-- 2026-09-15: 显示当前 editData 数据来源 — 帮用户判断数据是否完整 -->
+                    <span class="source-badge" :class="'source-' + (editData?._dataSource || 'unknown')" v-if="editData">
+                        {{ editData?._dataSource === 'local' ? '本地' :
+                           editData?._dataSource === 'cloud' ? '云端' :
+                           editData?._dataSource === 'squirrel-original' ? 'Squirrel 原始' :
+                           editData?._dataSource === 'local-incomplete' ? '本地（不完整）' :
+                           editData?._dataSource === 'local-error-fallback' ? '本地（云端出错）' : '未知来源' }}
+                    </span>
                     <button class="modal-close" @click="editDialogVisible = false">×</button>
                 </div>
                 <div class="modal-body" v-if="editData">
@@ -1515,6 +1599,69 @@
                 <div class="modal-footer">
                     <button class="btn btn-secondary" @click="editDialogVisible = false" :disabled="isSaving">取消</button>
                     <button class="btn btn-primary" @click="saveProject" :disabled="isSaving">{{ isSaving ? '保存中...' : '保存' }}</button>
+                    <!-- 2026-09-15: 重新加载按钮 — 数据丢失时手动从云端或 Squirrel 原始文件恢复 -->
+                    <div class="reload-wrapper">
+                        <button class="btn btn-secondary" @click="toggleReloadMenu" :disabled="isSaving || reloadLoading" :title="'数据丢失时手动恢复'">
+                            <span v-if="reloadLoading">⏳ 加载中...</span>
+                            <span v-else>🔄 重新加载 ▾</span>
+                        </button>
+                        <div v-if="reloadMenuOpen" class="reload-menu" @click.stop>
+                            <div class="reload-menu-item" @click="reloadFromCloud">
+                                <div class="reload-menu-icon">📦</div>
+                                <div class="reload-menu-text">
+                                    <div class="reload-menu-title">从云端 check_{{ editData?.projNo }}.json</div>
+                                    <div class="reload-menu-desc">本系统的分析数据 — 可能也丢失了</div>
+                                </div>
+                            </div>
+                            <div class="reload-menu-item" @click="openSquirrelOriginalPicker">
+                                <div class="reload-menu-icon">📂</div>
+                                <div class="reload-menu-text">
+                                    <div class="reload-menu-title">从 Squirrel Designer 原始文件</div>
+                                    <div class="reload-menu-desc">最完整 — 不受系统 bug 影响</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Squirrel 原始文件 user picker (子弹窗) -->
+                <div v-if="squirrelPickerOpen" class="modal-overlay" style="z-index: 100;" @click.self="squirrelPickerOpen = false">
+                    <div class="modal" style="max-width: 420px;">
+                        <div class="modal-header">
+                            <span class="modal-title">选择 Squirrel 业务员文件夹</span>
+                            <button class="modal-close" @click="squirrelPickerOpen = false">×</button>
+                        </div>
+                        <div class="modal-body">
+                            <p style="color: var(--subtext); font-size: 13px; margin-bottom: 12px;">
+                                选择原始报价所属的业务员，然后系统会从 <strong>{{ squirrelPickerUsername }}/{{ editData?.projNo }}.json</strong> 加载完整数据。
+                            </p>
+                            <div v-if="squirrelPickerLoading" style="padding: 20px; text-align: center; color: var(--subtext);">
+                                ⏳ 加载业务员列表...
+                            </div>
+                            <div v-else-if="squirrelPickerFolders.length === 0" style="padding: 20px; text-align: center; color: var(--accent);">
+                                找不到任何业务员文件夹
+                            </div>
+                            <div v-else class="folder-grid">
+                                <div v-for="f in squirrelPickerFolders" :key="f.name"
+                                     class="folder-item"
+                                     :class="{ active: squirrelPickerSelected === f.name }"
+                                     @click="selectSquirrelFolder(f.name)">
+                                    {{ f.name }}
+                                </div>
+                            </div>
+                            <div v-if="squirrelPickerFileCheck && !squirrelPickerFileCheck.exists" style="margin-top: 12px; padding: 10px; background: rgba(255, 159, 10, 0.1); border-radius: 8px; font-size: 12px; color: #b8761a;">
+                                ⚠️ 该业务员下找不到 <strong>{{ editData?.projNo }}.json</strong>。请换个业务员试试，或先确认原始文件是否还在 Drive。
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button class="btn btn-secondary" @click="squirrelPickerOpen = false">取消</button>
+                            <button class="btn btn-primary" @click="reloadFromSquirrelOriginal"
+                                    :disabled="!squirrelPickerSelected || !squirrelPickerFileCheck?.exists || reloadLoading">
+                                <span v-if="reloadLoading">⏳ 加载中...</span>
+                                <span v-else>载入并替换</span>
+                            </button>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -2382,12 +2529,14 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                             return;
                         }
                         editData.value = clone(localCached);
+                        editData.value._dataSource = 'local';
                     } else {
                         // 在线：本地有完整数据 → 用本地的（用户编辑过的话云端可能没保存成功）
                         //          本地无数据 → 才从云端拉
                         let usedSource = 'local';
                         if (localCached && isCompleteData(localCached)) {
                             editData.value = clone(localCached);
+                            editData.value._dataSource = 'local';
                         } else {
                             // 本地不完整或不存在 → 从云端拉
                             try {
@@ -2395,6 +2544,7 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                                 if (result.success && result.quote) {
                                     const editObj = buildNewDataFromRaw(result.quote, row.projNo);
                                     editData.value = clone(editObj);
+                                    editData.value._dataSource = 'cloud';
                                     usedSource = 'cloud';
                                     // 缓存到本地（fallback 备用）
                                     await saveQuoteToLocal(editData.value);
@@ -2402,6 +2552,7 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                                     // 云端也没有 → 用本地（哪怕不完整），至少给用户看
                                     if (localCached) {
                                         editData.value = clone(localCached);
+                                        editData.value._dataSource = 'local-incomplete';
                                         usedSource = 'local-incomplete';
                                     } else {
                                         alert('加载报价详情失败：' + (result.message || '未知错误') + '\n\n该报价在云端和本地都找不到。');
@@ -2412,6 +2563,7 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                                 // 云端报错 → fallback 到本地
                                 if (localCached) {
                                     editData.value = clone(localCached);
+                                    editData.value._dataSource = 'local-error-fallback';
                                     usedSource = 'local-error-fallback';
                                 } else {
                                     alert('加载报价详情失败：' + e.message);
@@ -2419,11 +2571,7 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                                 }
                             }
                         }
-                        if (usedSource !== 'local') {
-                            console.log('[openEdit] projNo=' + row.projNo + ' source=' + usedSource);
-                        } else {
-                            console.log('[openEdit] projNo=' + row.projNo + ' source=local (完整本地缓存)');
-                        }
+                        console.log('[openEdit] projNo=' + row.projNo + ' source=' + usedSource);
                     }
 
                     // Auto-expand sections based on existing data
@@ -2451,6 +2599,184 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     const hasSales = d.salesPerson && (d.salesPerson.name || d.salesPerson.phone);
                     const hasItems = Array.isArray(d.items) && d.items.length > 0;
                     return !!(hasCustomer && hasSales && hasItems);
+                };
+
+                // 2026-09-15: 重新加载功能 — 数据丢失时手动恢复
+                const reloadMenuOpen = ref(false);
+                const reloadLoading = ref(false);
+                const squirrelPickerOpen = ref(false);
+                const squirrelPickerLoading = ref(false);
+                const squirrelPickerFolders = ref([]);
+                const squirrelPickerSelected = ref(null);
+                const squirrelPickerFileCheck = ref(null);
+
+                const toggleReloadMenu = () => {
+                    reloadMenuOpen.value = !reloadMenuOpen.value;
+                    // 关闭弹窗时重置子状态
+                    if (!reloadMenuOpen.value) {
+                        // keep state — 用户可能想重新打开
+                    }
+                };
+
+                // 点击 reload-menu 外面关闭（用 window 监听）
+                const closeReloadMenuOnOutsideClick = (e) => {
+                    if (!reloadMenuOpen.value) return;
+                    const wrapper = e.target.closest('.reload-wrapper');
+                    if (!wrapper) reloadMenuOpen.value = false;
+                };
+                // 只挂一次
+                if (!window.__qa_reloadMenuListener) {
+                    window.addEventListener('click', closeReloadMenuOnOutsideClick);
+                    window.__qa_reloadMenuListener = true;
+                }
+
+                // 2026-09-15: 从云端 check_<projNo>.json 重新加载
+                const reloadFromCloud = async () => {
+                    reloadMenuOpen.value = false;
+                    if (!editData.value || !editData.value.projNo) {
+                        alert('当前没有打开的报价');
+                        return;
+                    }
+                    if (!navigator.onLine) {
+                        alert('当前离线，刷新需要联网');
+                        return;
+                    }
+                    if (!confirm('从云端 check_' + editData.value.projNo + '.json 重新加载会覆盖当前编辑区所有内容（包括未保存的修改）。\n\n确定要继续吗？')) {
+                        return;
+                    }
+                    reloadLoading.value = true;
+                    try {
+                        const result = await gasCall('get_check_quote', { projNo: editData.value.projNo });
+                        if (result.success && result.quote) {
+                            const newObj = buildNewDataFromRaw(result.quote, editData.value.projNo);
+                            newObj._dataSource = 'cloud';
+                            editData.value = clone(newObj);
+                            await saveQuoteToLocal(editData.value);
+                            // 重新展开 sections
+                            resetSectionsAfterReload();
+                            console.log('[reloadFromCloud] projNo=' + editData.value.projNo + ' OK');
+                        } else {
+                            alert('云端没有 check_' + editData.value.projNo + '.json：' + (result.message || '文件不存在') + '\n\n可以试试 "从 Squirrel 原始文件" 恢复。');
+                        }
+                    } catch (e) {
+                        alert('从云端加载失败：' + e.message);
+                    } finally {
+                        reloadLoading.value = false;
+                    }
+                };
+
+                // 2026-09-15: 打开 Squirrel 原始文件选择弹窗
+                const openSquirrelOriginalPicker = async () => {
+                    reloadMenuOpen.value = false;
+                    if (!editData.value || !editData.value.projNo) return;
+                    if (!navigator.onLine) {
+                        alert('当前离线，需要联网读取 Squirrel 原始文件');
+                        return;
+                    }
+                    if (!confirm('从 Squirrel Designer 原始 <user>/' + editData.value.projNo + '.json 加载会覆盖当前编辑区所有内容。\n\n⚠️ 这只恢复原始报价数据（客户/业务员/明细），不会恢复你在本系统添加的成本/佣金分析。\n\n确定要继续吗？')) {
+                        return;
+                    }
+                    squirrelPickerOpen.value = true;
+                    squirrelPickerSelected.value = null;
+                    squirrelPickerFileCheck.value = null;
+                    if (squirrelPickerFolders.value.length === 0) {
+                        squirrelPickerLoading.value = true;
+                        try {
+                            const result = await gasCall('list_user_folders');
+                            if (result.success && Array.isArray(result.folders)) {
+                                squirrelPickerFolders.value = result.folders;
+                            } else {
+                                alert('加载业务员文件夹失败：' + (result.message || '未知错误'));
+                                squirrelPickerOpen.value = false;
+                            }
+                        } catch (e) {
+                            alert('加载业务员文件夹失败：' + e.message);
+                            squirrelPickerOpen.value = false;
+                        } finally {
+                            squirrelPickerLoading.value = false;
+                        }
+                    }
+                };
+
+                // 监听 picker 选择 → 检查 file 是否存在
+                const checkSquirrelFile = async (username) => {
+                    if (!username || !editData.value?.projNo) return;
+                    try {
+                        const result = await gasCall('list_user_quote_files', { username });
+                        if (result.success && Array.isArray(result.files)) {
+                            const found = result.files.find(f => f.projNo === editData.value.projNo);
+                            squirrelPickerFileCheck.value = found
+                                ? { exists: true, fileId: found.id, fileName: found.name }
+                                : { exists: false };
+                        } else {
+                            squirrelPickerFileCheck.value = { exists: false, error: result.message };
+                        }
+                    } catch (e) {
+                        squirrelPickerFileCheck.value = { exists: false, error: e.message };
+                    }
+                };
+
+                // 监听 squirrelPickerSelected 变化（用 watch 替代）— 但 setup 里要简单化，手动用 effect
+                // 简化：直接通过 v-model + @click 触发
+
+                // 2026-09-15: 实际从 Squirrel 原始文件加载并替换 editData
+                const reloadFromSquirrelOriginal = async () => {
+                    if (!squirrelPickerSelected.value || !editData.value?.projNo) return;
+                    const check = squirrelPickerFileCheck.value;
+                    if (!check || !check.exists) {
+                        alert('找不到原始文件，请换个业务员试试');
+                        return;
+                    }
+                    reloadLoading.value = true;
+                    try {
+                        const result = await gasCall('read_user_quote_file', {
+                            username: squirrelPickerSelected.value,
+                            fileId: check.fileId
+                        });
+                        if (result.success && result.data) {
+                            const newObj = buildNewDataFromRaw(result.data, editData.value.projNo);
+                            newObj._dataSource = 'squirrel-original';
+                            // 保留旧 editData 的 status（用户可能标了"完成"）
+                            if (editData.value?.status) newObj.status = editData.value.status;
+                            editData.value = clone(newObj);
+                            await saveQuoteToLocal(editData.value);
+                            resetSectionsAfterReload();
+                            squirrelPickerOpen.value = false;
+                            console.log('[reloadFromSquirrelOriginal] projNo=' + editData.value.projNo + ' from=' + squirrelPickerSelected.value + ' OK');
+                        } else {
+                            alert('读取 Squirrel 原始文件失败：' + (result.message || '未知错误'));
+                        }
+                    } catch (e) {
+                        alert('读取 Squirrel 原始文件失败：' + e.message);
+                    } finally {
+                        reloadLoading.value = false;
+                    }
+                };
+
+                // 重新展开 sections（reload 后调用）
+                const resetSectionsAfterReload = () => {
+                    if (!editData.value) return;
+                    sections.customer = !(editData.value.customer?.name);
+                    sections.salesPerson = !(editData.value.salesPerson?.name);
+                    sections.items = !(Array.isArray(editData.value.items) && editData.value.items.length > 0);
+                    const c = editData.value.commission || {};
+                    const hasCommission = ['sales', 'subSales', 'measurer', 'designer', 'manager']
+                        .some(role => (c[role]?.percent || 0) > 0);
+                    sections.commission = !hasCommission;
+                    sections.actualCost = !(editData.value.actualCost?.entries?.length > 0);
+                    sections.designFee = !(editData.value.designFee?.entries?.length > 0);
+                    sections.installFee = !(editData.value.installFee?.entries?.length > 0);
+                    sections.logisticsFee = !(editData.value.logisticsFee?.entries?.length > 0);
+                    sections.loss = !(editData.value.loss?.entries?.length > 0);
+                };
+
+                // 监听 picker 选择变化 → check file exists
+                // 用 watch 需要在 setup 内 — 用 ref + 单独 effect 实现
+                // 简化：直接在模板 @click 上同时调 checkSquirrelFile
+                const selectSquirrelFolder = async (name) => {
+                    squirrelPickerSelected.value = name;
+                    squirrelPickerFileCheck.value = null;
+                    await checkSquirrelFile(name);
                 };
 
                 const updateCommission = (role) => {
@@ -2738,7 +3064,11 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     // 2026-08-23: Excel 式排序 + 浮层筛选
                     sortKey, sortDir, columnFilters, sortedFilteredList, hasActiveFilters, sortArrow, toggleSort, openFilter, closeFilter, hasFilter, clearOneFilter, toggleStatusFilter, clearAllFilters, activeFilter, filterPopoverStyle, filterLabels, filterTypes, statusOptions,
                     formatNumber, filterData, syncFromCloud, showImportDialog, showExportDialog, openEdit, updateCommission, markComplete, deleteProject, saveProject,
-                    addCostEntry, removeCostEntry, addDesignEntry, removeDesignEntry, addInstallEntry, removeInstallEntry, addLogisticsEntry, removeLogisticsEntry, addLossEntry, removeLossEntry, logout
+                    addCostEntry, removeCostEntry, addDesignEntry, removeDesignEntry, addInstallEntry, removeInstallEntry, addLogisticsEntry, removeLogisticsEntry, addLossEntry, removeLossEntry, logout,
+                    // 2026-09-15: 重新加载 — 数据丢失手动恢复
+                    reloadMenuOpen, reloadLoading, toggleReloadMenu, reloadFromCloud,
+                    squirrelPickerOpen, squirrelPickerLoading, squirrelPickerFolders, squirrelPickerSelected, squirrelPickerFileCheck,
+                    openSquirrelOriginalPicker, reloadFromSquirrelOriginal, selectSquirrelFolder, resetSectionsAfterReload
                 };
             }
         });
