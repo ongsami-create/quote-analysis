@@ -820,6 +820,26 @@
             border-color: var(--secondary);
         }
 
+        /* 2026-09-15: 同步云端按钮 + 旋转 spinner + 同步时间 */
+        .sync-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .sync-spinner {
+            display: inline-block;
+            animation: sync-spin 1.2s linear infinite;
+        }
+        @keyframes sync-spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        .sync-time {
+            font-size: 11px;
+            color: var(--subtext);
+            white-space: nowrap;
+        }
+
         /* Loading */
         .loading-overlay {
             position: fixed;
@@ -929,9 +949,16 @@
                         📊 导出 Excel
                     </button>
                 </div>
-                <button class="btn btn-secondary" @click="syncFromCloud">
-                    🔄 同步云端
-                </button>
+                <div class="sync-controls">
+                    <button class="btn btn-secondary" @click="userSyncFromCloud" :disabled="isSyncingFromCloud">
+                        <span v-if="isSyncingFromCloud" class="sync-spinner">⏳</span>
+                        <span v-else>🔄</span>
+                        <span>{{ isSyncingFromCloud ? '同步中...' : '同步云端' }}</span>
+                    </button>
+                    <span v-if="lastSyncTime" class="sync-time" :title="'完整时间: ' + lastSyncTime.toLocaleString()">
+                        上次同步: {{ formatSyncTime(lastSyncTime) }}
+                    </span>
+                </div>
             </div>
 
             <!-- Filter Bar -->
@@ -2197,6 +2224,21 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 // Methods
                 const formatNumber = (num) => (num ?? 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+                // 2026-09-15: 同步时间显示 — "5 秒前" / "3 分钟前" / "12:34:56"
+                const formatSyncTime = (date) => {
+                    if (!date) return '';
+                    const now = Date.now();
+                    const diff = Math.floor((now - date.getTime()) / 1000);
+                    if (diff < 60) return diff + ' 秒前';
+                    if (diff < 3600) return Math.floor(diff / 60) + ' 分钟前';
+                    if (diff < 86400) return Math.floor(diff / 3600) + ' 小时前';
+                    // 超过 1 天显示具体时间
+                    const h = String(date.getHours()).padStart(2, '0');
+                    const m = String(date.getMinutes()).padStart(2, '0');
+                    const s = String(date.getSeconds()).padStart(2, '0');
+                    return h + ':' + m + ':' + s;
+                };
+
                 // 2026-08-28: 改用 JSON 方式 — structuredClone 对 Vue reactive Proxy 会失败
                 // (editData.value 是 ref 自动包装的 Proxy，里面有 Vue 内部 symbols)
                 // JSON.parse(JSON.stringify()) 走 JSON 序列化能穿透 Proxy 拿到纯数据
@@ -2258,6 +2300,10 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     }
                 }
 
+                // 2026-09-15: 同步状态（独立于 isLoading，让用户看到按钮在转）
+                const isSyncingFromCloud = ref(false);
+                const lastSyncTime = ref(null);
+
                 const syncFromCloud = async () => {
                     // 2026-08-15 优化：先从 localStorage 立即返回（5min 内不阻塞首屏）
                     const cachedList = lsCacheGet('qa_list');
@@ -2271,26 +2317,19 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                             lsCacheSet('qa_list', localData);  // 顺便写入 localStorage 给下次用
                         }
                     }
-                    // 不再设 isLoading=true —— 如果有缓存，UI 立即显示；没有才显示 loading
                     if (listData.value.length === 0) {
                         isLoading.value = true;
                         loadingText.value = '正在加载...';
                     }
-
                     try {
                         if (navigator.onLine) {
-                            // 跳过 ping 测试（多 5-10s）—— 直接拉 list，失败再 fallback
                             const result = await gasCall('get_check_quote_list');
                             if (result.success && result.quotes) {
-                                // 替换为云端数据（可能比缓存新）
-                                if (result.quotes.length > 0) {
-                                    listData.value = result.quotes;
-                                    lsCacheSet('qa_list', result.quotes);
-                                    await saveToLocal(result.quotes);
-                                }
+                                listData.value = result.quotes;
+                                lsCacheSet('qa_list', result.quotes);
+                                await saveToLocal(result.quotes);
                                 isConnected.value = true;
                             } else {
-                                // cloud 返回失败 — 保留 localStorage 缓存
                                 isConnected.value = false;
                             }
                         } else {
@@ -2302,6 +2341,37 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                         isConnected.value = false;
                     } finally {
                         isLoading.value = false;
+                    }
+                };
+
+                // 2026-09-15: 用户主动点 "同步云端" — 显示 loading + force 跳过 GAS 10s 缓存
+                const userSyncFromCloud = async () => {
+                    if (isSyncingFromCloud.value) return;  // 防重入
+                    isSyncingFromCloud.value = true;
+                    try {
+                        if (!navigator.onLine) {
+                            alert('当前离线，无法同步云端');
+                            return;
+                        }
+                        const result = await gasCall('get_check_quote_list', { force: 1 });
+                        if (result.success && result.quotes) {
+                            // 强制替换（即使云端返回空数组，也清掉 localStorage 的 stale 数据）
+                            listData.value = result.quotes;
+                            lsCacheSet('qa_list', result.quotes);
+                            await saveToLocal(result.quotes);
+                            isConnected.value = true;
+                            lastSyncTime.value = new Date();
+                            console.log('[userSync] force refresh, got', result.quotes.length, 'quotes');
+                        } else {
+                            isConnected.value = false;
+                            alert('同步失败：' + (result.message || '云端返回错误'));
+                        }
+                        syncQueueCount.value = await getSyncQueueCount();
+                    } catch (error) {
+                        isConnected.value = false;
+                        alert('同步失败：' + error.message);
+                    } finally {
+                        isSyncingFromCloud.value = false;
                     }
                 };
 
@@ -3063,7 +3133,8 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     actualCostTotal, designFeeTotal, installFeeTotal, logisticsFeeTotal, commissionTotal, lossTotal, totalCost, netProfit, netProfitPercent, isSaving,
                     // 2026-08-23: Excel 式排序 + 浮层筛选
                     sortKey, sortDir, columnFilters, sortedFilteredList, hasActiveFilters, sortArrow, toggleSort, openFilter, closeFilter, hasFilter, clearOneFilter, toggleStatusFilter, clearAllFilters, activeFilter, filterPopoverStyle, filterLabels, filterTypes, statusOptions,
-                    formatNumber, filterData, syncFromCloud, showImportDialog, showExportDialog, openEdit, updateCommission, markComplete, deleteProject, saveProject,
+                    formatNumber, filterData, syncFromCloud, userSyncFromCloud, showImportDialog, showExportDialog, openEdit, updateCommission, markComplete, deleteProject, saveProject,
+                    isSyncingFromCloud, lastSyncTime, formatSyncTime,
                     addCostEntry, removeCostEntry, addDesignEntry, removeDesignEntry, addInstallEntry, removeInstallEntry, addLogisticsEntry, removeLogisticsEntry, addLossEntry, removeLossEntry, logout,
                     // 2026-09-15: 重新加载 — 数据丢失手动恢复
                     reloadMenuOpen, reloadLoading, toggleReloadMenu, reloadFromCloud,

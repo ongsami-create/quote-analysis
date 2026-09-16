@@ -1399,11 +1399,14 @@ function getCheckQuoteMeta(projNo) {
  * 列出 squirrel analysis/ 文件夹中所有已保存的报价分析
  * action: get_check_quote_list
  */
-function getCheckQuoteList() {
+function getCheckQuoteList(forceRefresh) {
   try {
+    // 2026-09-15: 用户主动点 "同步云端" 时 forceRefresh=true，跳过 cache（e.parameter.force=1）
     // 2026-08-15: 10s 跨调用 cache（CacheService 持久化）
-    const cached = cacheGet('qa_list_v1');
-    if (cached) return { success: true, quotes: cached, cached: true };
+    if (!forceRefresh) {
+      const cached = cacheGet('qa_list_v1');
+      if (cached) return { success: true, quotes: cached, cached: true };
+    }
 
     initializeFolders();
     const files = analysisFolder.getFiles();
@@ -1653,7 +1656,8 @@ function doGet(e) {
         result = saveCheckQuote(e.parameter.projNo, JSON.parse(e.parameter.quoteData || '{}'));
         break;
       case 'get_check_quote_list':
-        result = getCheckQuoteList();
+        // 2026-09-15: 用户主动点 "同步云端" 时带 force=1，跳过 10s CacheService 缓存
+        result = getCheckQuoteList(e.parameter.force === '1');
         break;
       case 'clean_analysis_folder':
         result = cleanAnalysisFolder();
