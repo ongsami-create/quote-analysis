@@ -2890,10 +2890,15 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                                     // 2026-09-15: 不再用 saveQuoteToLocal(item) — item 是摘要，会覆盖完整数据
                                     // 改用 mergeStatusIntoLocal — 只更新 status 字段
                                     await mergeStatusIntoLocal(item.projNo, newStatus);
-                                    await gasCall('save_check_quote', {
+                                    // 2026-09-15: 调新的 mark_check_complete action — 只改 status，不动其他字段
+                                    // 之前调 save_check_quote 会用 item（摘要）覆盖整个 check_<projNo>.json
+                                    const result = await gasCall('mark_check_complete', {
                                         projNo: item.projNo,
-                                        quoteData: clone(item)
-                                    }, 'POST');
+                                        status: newStatus
+                                    });
+                                    if (!result.success) {
+                                        console.warn('[batchMarkComplete] cloud mark failed for', item.projNo, result.message);
+                                    }
                                 } catch (e) {
                                     console.warn('[batchMarkComplete] cloud save failed for', item.projNo, e);
                                 }
@@ -2940,20 +2945,26 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 };
 
                 const markComplete = async (row) => {
-                    row.status = row.status === 'completed' ? 'pending' : 'completed';
+                    const newStatus = row.status === 'completed' ? 'pending' : 'completed';
+                    row.status = newStatus;
                     // 2026-08-15：同步更新 localStorage 缓存
                     lsCacheSet('qa_list', listData.value);
                     await saveToLocal(listData.value);
                     // 2026-09-15: 不再调用 saveQuoteToLocal(row) — row 是 listData 里的摘要，会用摘要覆盖 IDB 里完整的 editData
                     // 改用 mergeStatusIntoLocal：只更新 status 字段，保留其他完整字段
-                    await mergeStatusIntoLocal(row.projNo, row.status);
-                    // Sync completion state to squirrel analysis/ cloud folder
+                    await mergeStatusIntoLocal(row.projNo, newStatus);
+                    // 2026-09-15: 调新的 mark_check_complete action — 只改 status，不动其他字段
+                    // 修复 bug: 之前调 save_check_quote 会用 row（摘要）覆盖整个 check_<projNo>.json
+                    //   → customer/salesPerson/items/actualCost/commission 等被永久覆盖丢失
                     if (navigator.onLine) {
                         try {
-                            await gasCall('save_check_quote', {
+                            const result = await gasCall('mark_check_complete', {
                                 projNo: row.projNo,
-                                quoteData: row
-                            }, 'POST');
+                                status: newStatus
+                            });
+                            if (!result.success) {
+                                console.warn('[markComplete] cloud sync failed:', result.message);
+                            }
                         } catch (e) {
                             console.warn('[markComplete] cloud sync failed:', e);
                         }

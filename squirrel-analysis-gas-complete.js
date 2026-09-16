@@ -1328,6 +1328,67 @@ function saveCheckQuote(projNo, quoteData) {
 }
 
 /**
+ * 2026-09-15: 只更新 check_<projNo>.json 的 status 字段，**不动其他字段**
+ *
+ * 历史 bug: markComplete 之前用 save_check_quote 传 listData 摘要行覆盖整个文件
+ *   → customer/salesPerson/items/actualCost/commission 等全部被永久覆盖成空
+ *
+ * 正确逻辑: 状态（pending/completed）只是元数据，应该只 merge status 不动数据
+ *   - 如果 check_<projNo>.json 不存在 → 返回错误（必须先导入）
+ *   - 否则: 读现有 → 仅改 status + completedAt + completedBy → 写回
+ *
+ * action: mark_check_complete
+ * @param projNo - 项目编号
+ * @param status - 'pending' 或 'completed'
+ * @param username - 操作人（用于 completedBy）
+ */
+function markCheckComplete(projNo, status, username) {
+  try {
+    initializeFolders();
+    const fileName = 'check_' + projNo + '.json';
+    const files = analysisFolder.getFilesByName(fileName);
+    if (!files.hasNext()) {
+      return { success: false, message: 'check_' + projNo + '.json 不存在，请先导入' };
+    }
+    const file = files.next();
+    let data = JSON.parse(file.getBlob().getDataAsString());
+    // Defensive: 防止 double-encoded legacy data
+    if (typeof data === 'string') {
+      try { data = JSON.parse(data); } catch (e) { /* keep as-is */ }
+    }
+
+    // 只 merge 这 3 个字段，其他字段原样保留
+    data.status = status;
+    if (status === 'completed') {
+      data.completedAt = new Date().toISOString();
+      if (username) data.completedBy = username;
+    } else {
+      // 'pending'：清掉完成时间戳，避免显示陈旧的"完成时间"
+      delete data.completedAt;
+      delete data.completedBy;
+    }
+    // 同步更新 lastModified
+    data.lastModified = new Date().toISOString().split('T')[0];
+
+    // 写回（delete old + create new — 跟 saveCheckQuote 一致）
+    const allFiles = analysisFolder.getFilesByName(fileName);
+    while (allFiles.hasNext()) {
+      allFiles.next().setTrashed(true);
+    }
+    analysisFolder.createFile(fileName, JSON.stringify(data), 'application/json');
+
+    // 失效 list 缓存
+    cacheRemove('qa_list_v1');
+    checkQuoteListCache = null;
+
+    logActivity(username || 'system', 'mark_check_complete', projNo, 'Status → ' + status);
+    return { success: true, message: 'Status updated to ' + status, status: status };
+  } catch (error) {
+    return { success: false, message: 'markCheckComplete: ' + error.toString() };
+  }
+}
+
+/**
  * 清空 squirrel analysis/ 文件夹里所有 check_*.json
  * action: clean_analysis_folder
  * DEBUG ONLY: 用来清掉双重 JSON 编码的脏数据
@@ -1655,6 +1716,10 @@ function doGet(e) {
       case 'save_check_quote':
         result = saveCheckQuote(e.parameter.projNo, JSON.parse(e.parameter.quoteData || '{}'));
         break;
+      case 'mark_check_complete':
+        // 2026-09-15: 只 merge status，不覆盖其他字段（修复数据丢失根因）
+        result = markCheckComplete(e.parameter.projNo, e.parameter.status, e.parameter.username);
+        break;
       case 'get_check_quote_list':
         // 2026-09-15: 用户主动点 "同步云端" 时带 force=1，跳过 10s CacheService 缓存
         result = getCheckQuoteList(e.parameter.force === '1');
@@ -1729,6 +1794,10 @@ function doPost(e) {
       case 'save_check_quote':
         // POST 方式：projNo 和 quoteData 从 body 取
         result = saveCheckQuote(payload.projNo, payload.quoteData || {});
+        break;
+      case 'mark_check_complete':
+        // 2026-09-15: POST 同样支持 — 前端用 POST 因为 status 是中文不会有问题但更安全
+        result = markCheckComplete(payload.projNo, payload.status, payload.username);
         break;
       case 'import_quote_to_analysis':
         result = importQuoteToAnalysis(payload.username, payload.fileId);
