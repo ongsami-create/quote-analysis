@@ -2473,21 +2473,24 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                         status: raw.status || 'pending',
                         lastModified: raw.lastModified || new Date().toISOString().split('T')[0],
                         discount: raw.discount || 0,
-                        // Template-friendly aliases
+                        // Template-friendly aliases — 2026-09-20: 兼容嵌套对象和顶层平铺两种字段命名
+                        // 之前 bug: 云端 JSON 用 {customer:{phone:...}} 嵌套结构, 但代码只读顶层 {customerContact:...}
+                        //   → customer.name "Meng" 能显示(顶层 customerName 存在), 其他字段全空
+                        // 修复: 优先读嵌套对象, fallback 到顶层平铺
                         customer: {
-                            date: raw.date || '',
-                            name: raw.customerName || '',
-                            ic: raw.customerIC || '',
-                            phone: raw.customerContact || '',
-                            address: raw.customerAddress || ''
+                            date: raw.customer?.date || raw.date || '',
+                            name: raw.customer?.name || raw.customerName || '',
+                            ic: raw.customer?.ic || raw.customerIC || '',
+                            phone: raw.customer?.phone || raw.customerContact || '',
+                            address: raw.customer?.address || raw.customerAddress || ''
                         },
                         salesPerson: {
-                            projNo: raw.projNo || projNo,
-                            name: raw.salesperson || '',
-                            phone: raw.salespersonContact || '',
-                            subSales: raw.subSalesperson || '',
-                            measurer: raw.measurementEngineer || '',
-                            designer: raw.designerName || ''
+                            projNo: raw.salesPerson?.projNo || raw.projNo || projNo,
+                            name: raw.salesPerson?.name || raw.salesperson || '',
+                            phone: raw.salesPerson?.phone || raw.salespersonContact || '',
+                            subSales: raw.salesPerson?.subSales || raw.subSalesperson || '',
+                            measurer: raw.salesPerson?.measurer || raw.measurementEngineer || '',
+                            designer: raw.salesPerson?.designer || raw.designerName || ''
                         },
                         // Items (mapped)
                         items,
