@@ -3132,11 +3132,15 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                                 const result = await gasCall('get_check_quote', { projNo: row.projNo });
                                 if (result.success && result.quote) {
                                     const editObj = buildNewDataFromRaw(result.quote, row.projNo);
+                                    // 2026-09-20: 关键修复 — 不再用 cloud 数据覆盖 local
+                                    // 之前 bug: local 有更完整数据但被 cloud 不完整版覆盖 → 数据丢失
+                                    // 现在: 只在 local 完全不存在时才缓存; 否则保留 local 原样 (用户可点 重新加载 显式覆盖)
+                                    if (!localCached) {
+                                        await saveQuoteToLocal(editObj);
+                                    }
                                     editData.value = clone(editObj);
                                     editData.value._dataSource = 'cloud';
                                     usedSource = 'cloud';
-                                    // 缓存到本地（fallback 备用）
-                                    await saveQuoteToLocal(editData.value);
                                 } else {
                                     // 云端也没有 → 用本地（哪怕不完整），至少给用户看
                                     if (localCached) {
