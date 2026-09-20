@@ -2915,7 +2915,7 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
 </div>
 
 <!-- 第1行: 客户信息 -->
-<div class="section keep-with-next">
+<div class="section">
     <div class="section-title"><span class="num">①</span>客户信息</div>
     <div class="grid-2">
         <div><strong>姓名：</strong>${printEscape(c.name || '')}</div>
@@ -2937,8 +2937,8 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
     </div>
 </div>
 
-<!-- 第3行: 报价明细 -->
-<div class="section no-break">
+<!-- 第3行: 报价明细 — 让表格自然跨页, 表头自动重复 -->
+<div class="section">
     <div class="section-title"><span class="num">③</span>报价明细 (${items.length} 项)</div>
     ${items.length === 0 ? '<p class="empty-note">暂无明细</p>' : `
     <table>
