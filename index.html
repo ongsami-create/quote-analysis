@@ -2621,13 +2621,26 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
 
                     // 写入 HTML
                     const doc = iframe.contentDocument || iframe.contentWindow.document;
+                    const pdfTitle = 'check_' + (data.projNo || 'quote');
                     doc.open();
                     doc.write(buildPrintHtml(data));
                     doc.close();
+                    // 2026-09-20: 强制设 title (Chrome 保存 PDF 文件名来源) — 多重保险
+                    try {
+                        doc.title = pdfTitle;
+                        const head = doc.head || doc.getElementsByTagName('head')[0];
+                        if (head) {
+                            const titleEl = head.querySelector('title') || doc.createElement('title');
+                            titleEl.textContent = pdfTitle;
+                            if (!titleEl.parentNode) head.appendChild(titleEl);
+                        }
+                    } catch (e) { console.warn('[printOne] setTitle failed:', e); }
 
                     // 等 iframe 加载完触发打印
                     iframe.onload = () => {
                         try {
+                            // 再设一次, 确保生效
+                            try { iframe.contentDocument.title = pdfTitle; } catch (e) {}
                             iframe.contentWindow.focus();
                             iframe.contentWindow.print();
                         } catch (e) {
@@ -2745,9 +2758,14 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
         padding: 10px 12px;
         border: 1px solid #d8d8dc;
         border-radius: 6px;
-        page-break-inside: avoid;
         background: #fff;
     }
+    /* 2026-09-20: 小 section (客户/业务员) 不强制同页, 让浏览器自然流 — 避免最后一行被孤立分页 */
+    .section.keep-with-next { page-break-after: avoid; }
+    /* 报价明细 / 大表格 section: 不要在自身中间分页 */
+    .section.no-break { page-break-inside: avoid; }
+    /* section 标题孤立保护: 标题不单独出现在页底 */
+    .section-title { page-break-after: avoid; }
     .section-title {
         font-size: 12px;
         font-weight: 700;
@@ -2837,7 +2855,8 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
     }
     .signature-grid {
         display: grid;
-        grid-template-columns: repeat(3, 1fr);
+        grid-template-columns: 1fr;
+        max-width: 400px;
         gap: 18px;
     }
     .sig-block { display: flex; flex-direction: column; }
@@ -2893,7 +2912,7 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
 </div>
 
 <!-- 第1行: 客户信息 -->
-<div class="section">
+<div class="section keep-with-next">
     <div class="section-title"><span class="num">①</span>客户信息</div>
     <div class="grid-2">
         <div><strong>姓名：</strong>${printEscape(c.name || '')}</div>
@@ -2905,7 +2924,7 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
 </div>
 
 <!-- 第2行: 业务员 -->
-<div class="section">
+<div class="section keep-with-next">
     <div class="section-title"><span class="num">②</span>业务员</div>
     <div class="grid-2">
         <div><strong>主销售：</strong>${printEscape(sp.name || '')}${sp.phone ? ' (' + printEscape(sp.phone) + ')' : ''}</div>
@@ -2916,7 +2935,7 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
 </div>
 
 <!-- 第3行: 报价明细 -->
-<div class="section">
+<div class="section no-break">
     <div class="section-title"><span class="num">③</span>报价明细 (${items.length} 项)</div>
     ${items.length === 0 ? '<p class="empty-note">暂无明细</p>' : `
     <table>
@@ -3074,18 +3093,6 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
 <div class="signature-section">
     <div class="signature-title">审核签字 · Approval & Signature</div>
     <div class="signature-grid">
-        <div class="sig-block">
-            <div class="sig-label">客户签字 / Customer</div>
-            <div class="sig-line"></div>
-            <div class="sig-name">${printEscape(c.name || '')}</div>
-            <div class="sig-date">日期 / Date: ___________________</div>
-        </div>
-        <div class="sig-block">
-            <div class="sig-label">业务员 / Salesperson</div>
-            <div class="sig-line"></div>
-            <div class="sig-name">${printEscape(sp.name || '')}</div>
-            <div class="sig-date">日期 / Date: ___________________</div>
-        </div>
         <div class="sig-block">
             <div class="sig-label">审核 / Approved By</div>
             <div class="sig-line"></div>
