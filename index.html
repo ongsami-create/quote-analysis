@@ -1062,6 +1062,7 @@
                             </td>
                             <td>
                                 <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px;" @click="openEdit(item)">编辑</button>
+                                <button class="btn btn-secondary" style="padding: 4px 8px; font-size: 12px;" @click="printOne(item)" title="导出此报价为 PDF（浏览器打印 → 另存为 PDF）">📄 PDF</button>
                                 <button class="btn btn-success" style="padding: 4px 8px; font-size: 12px;" @click="markComplete(item)" :title="item.status === 'completed' ? '点击取消完成（仅作审阅标记）' : '点击标记完成（仅作审阅标记）'">
                                     {{ item.status === 'completed' ? '取消' : '完成' }}
                                 </button>
@@ -2587,6 +2588,316 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     alert('导出 ' + type.toUpperCase() + ' 功能开发中...\n\n请选择一个报价项目进行导出。');
                 };
 
+                // 2026-09-20: print-to-PDF — 浏览器原生打印对话框, 0 CDN 依赖, 用户另存为 PDF 即可
+                // 流程: 拿完整数据 → 构建 iframe → 写入 print-ready HTML → 调用 iframe.contentWindow.print()
+                const printOne = async (row) => {
+                    if (!row || !row.projNo) {
+                        alert('无效的报价数据');
+                        return;
+                    }
+                    // 拿完整数据 (本地 IDB → 云端 → listData summary)
+                    let data = await getQuoteFromLocal(row.projNo);
+                    if (data && isCompleteData(data)) {
+                        // 用本地数据
+                    } else if (navigator.onLine) {
+                        try {
+                            const result = await gasCall('get_check_quote', { projNo: row.projNo });
+                            if (result.success && result.quote) {
+                                data = buildNewDataFromRaw(result.quote, row.projNo);
+                            }
+                        } catch (e) {
+                            console.warn('[printOne] cloud fetch failed:', e);
+                        }
+                    }
+                    if (!data) {
+                        // 兜底: 用 listData summary
+                        data = row;
+                    }
+
+                    // 构建 iframe
+                    const iframe = document.createElement('iframe');
+                    iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1123px;border:none;';
+                    document.body.appendChild(iframe);
+
+                    // 写入 HTML
+                    const doc = iframe.contentDocument || iframe.contentWindow.document;
+                    doc.open();
+                    doc.write(buildPrintHtml(data));
+                    doc.close();
+
+                    // 等 iframe 加载完触发打印
+                    iframe.onload = () => {
+                        try {
+                            iframe.contentWindow.focus();
+                            iframe.contentWindow.print();
+                        } catch (e) {
+                            console.error('[printOne] print() failed:', e);
+                            alert('打开打印对话框失败：' + e.message);
+                        }
+                        // 延迟移除 (Chrome 关闭对话框后 iframe 还能用一会儿)
+                        setTimeout(() => {
+                            if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
+                        }, 2000);
+                    };
+                };
+
+                // 2026-09-20: HTML 转义 (防止 customer.name 等用户输入含 < > & 破坏 HTML)
+                const printEscape = (s) => String(s == null ? '' : s)
+                    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+
+                // 2026-09-20: 数字格式化 (与主页面 formatNumber 一致)
+                const printNum = (n) => (n == null || isNaN(n) ? '0.00' : Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
+
+                // 2026-09-20: 构建 print-ready HTML (10 行内容)
+                const buildPrintHtml = (d) => {
+                    const c = d.customer || {};
+                    const sp = d.salesPerson || {};
+                    const items = Array.isArray(d.items) ? d.items : [];
+                    const totalSales = d.summary?.totalSales || d.totalSales || 0;
+                    const actualCost = d.actualCost?.entries || [];
+                    const designFee = d.designFee?.entries || [];
+                    const installFee = d.installFee?.entries || [];
+                    const logisticsFee = d.logisticsFee?.entries || [];
+                    const loss = d.loss?.entries || [];
+                    const commission = d.commission || {};
+                    const totalCost = d.totalCost || 0;
+                    const profit = d.profit || (totalSales - totalCost);
+                    const profitPercent = d.profitPercent || (totalSales > 0 ? (profit / totalSales * 100) : 0);
+
+                    // 计算各项小计
+                    const actualCostTotal = actualCost.reduce((s, e) => s + (e.cost || 0), 0);
+                    const designFeeTotal = designFee.reduce((s, e) => s + (e.amount || 0), 0);
+                    const installFeeTotal = installFee.reduce((s, e) => s + (e.amount || 0), 0);
+                    const logisticsFeeTotal = logisticsFee.reduce((s, e) => s + (e.amount || 0), 0);
+                    const lossTotal = loss.reduce((s, e) => s + (e.amount || 0), 0);
+                    const commissionRoles = ['sales', 'subSales', 'measurer', 'designer', 'manager'];
+                    const commissionTotal = commissionRoles.reduce((s, r) => s + ((commission[r]?.amount) || 0), 0);
+                    const calculatedCost = actualCostTotal + designFeeTotal + installFeeTotal + logisticsFeeTotal + commissionTotal + lossTotal;
+
+                    return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>报价 ${printEscape(d.projNo || '')} - ${printEscape(d.customerName || '')}</title>
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif; color: #1d1d1f; font-size: 12px; line-height: 1.5; padding: 20px; }
+    h1 { font-size: 20px; margin-bottom: 6px; color: #1d1d1f; }
+    h2 { font-size: 14px; margin: 14px 0 6px; padding: 6px 10px; background: #fafafa; border-left: 3px solid #007AFF; color: #1d1d1f; }
+    .subtitle { color: #6e6e73; font-size: 12px; margin-bottom: 14px; }
+    .section { margin-bottom: 14px; padding: 10px; border: 1px solid #e5e5e7; border-radius: 6px; page-break-inside: avoid; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; font-size: 11px; }
+    .grid-2 div { padding: 2px 0; }
+    .grid-2 strong { color: #6e6e73; margin-right: 4px; font-weight: 500; }
+    table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 6px; }
+    th, td { padding: 5px 6px; border-bottom: 1px solid #e5e5e7; text-align: left; }
+    th { background: #fafafa; font-weight: 600; color: #6e6e73; text-transform: uppercase; font-size: 9px; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .item-name { font-weight: 500; }
+    .item-desc { color: #6e6e73; font-size: 9px; }
+    .summary-box { background: #fafafa; padding: 10px; border-radius: 6px; margin-top: 10px; }
+    .summary-box .row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 11px; }
+    .summary-box .row.total { border-top: 1px solid #e5e5e7; margin-top: 6px; padding-top: 6px; font-weight: 700; font-size: 13px; color: #007AFF; }
+    .summary-box .row.profit-low { color: #FF3B30; }
+    .summary-box .row.profit-medium { color: #FF9500; }
+    .commission-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; font-size: 10px; }
+    .commission-grid div { padding: 4px; background: #fafafa; border-radius: 4px; }
+    .commission-grid strong { display: block; color: #6e6e73; font-size: 9px; margin-bottom: 2px; }
+    .empty-note { color: #999; font-size: 10px; font-style: italic; padding: 4px 0; }
+    .page-break { page-break-before: always; }
+    @media print {
+        body { padding: 0; }
+        .section { border-color: #ccc; }
+    }
+</style>
+</head>
+<body>
+    <h1>📋 报价分析 — ${printEscape(d.projNo || '')}</h1>
+    <p class="subtitle">客户：${printEscape(d.customerName || c.name || '')} · 业务员：${printEscape(sp.name || '')} · 状态：${printEscape(d.status === 'completed' ? '已完成' : '进行中')}</p>
+
+    <!-- 第1行: 客户信息 -->
+    <div class="section">
+        <h2>① 客户信息</h2>
+        <div class="grid-2">
+            <div><strong>姓名：</strong>${printEscape(c.name || '')}</div>
+            <div><strong>电话：</strong>${printEscape(c.phone || '')}</div>
+            <div><strong>IC：</strong>${printEscape(c.ic || '')}</div>
+            <div><strong>日期：</strong>${printEscape(c.date || '')}</div>
+            <div style="grid-column: 1 / -1;"><strong>地址：</strong>${printEscape(c.address || '')}</div>
+        </div>
+    </div>
+
+    <!-- 第2行: 业务员 -->
+    <div class="section">
+        <h2>② 业务员</h2>
+        <div class="grid-2">
+            <div><strong>主销售：</strong>${printEscape(sp.name || '')}${sp.phone ? ' (' + printEscape(sp.phone) + ')' : ''}</div>
+            <div><strong>副销售：</strong>${printEscape(sp.subSales || '')}</div>
+            <div><strong>测量师：</strong>${printEscape(sp.measurer || '')}</div>
+            <div><strong>设计师：</strong>${printEscape(sp.designer || '')}</div>
+        </div>
+    </div>
+
+    <!-- 第3行: 报价明细 -->
+    <div class="section">
+        <h2>③ 报价明细 (${items.length} 项)</h2>
+        ${items.length === 0 ? '<p class="empty-note">暂无明细</p>' : `
+        <table>
+            <thead>
+                <tr>
+                    <th>区域</th>
+                    <th>项目</th>
+                    <th>描述</th>
+                    <th class="num">宽×高×深</th>
+                    <th class="num">面积</th>
+                    <th class="num">数量</th>
+                    <th class="num">单价</th>
+                    <th class="num">总价</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${items.map(item => `<tr>
+                    <td>${printEscape(item.area || '')}</td>
+                    <td><span class="item-name">${printEscape(item.itemBZh || item.itemB || '')}</span></td>
+                    <td><span class="item-desc">${printEscape(item.description || '')}</span></td>
+                    <td class="num">${item.w || 0}×${item.h || 0}×${item.d || 0}</td>
+                    <td class="num">${(item.value || 0).toFixed(2)}</td>
+                    <td class="num">${item.qty || 1}</td>
+                    <td class="num">RM ${printNum(item.unitPrice)}</td>
+                    <td class="num">RM ${printNum(item.total)}</td>
+                </tr>`).join('')}
+            </tbody>
+        </table>`}
+    </div>
+
+    <!-- 第4行: 实际成本 (SST 10%) -->
+    <div class="section">
+        <h2>④ 实际成本 (SST 10%)</h2>
+        ${actualCost.length === 0 ? '<p class="empty-note">暂无记录</p>' : `
+        <table>
+            <thead>
+                <tr>
+                    <th>日期</th>
+                    <th>供应商</th>
+                    <th class="num">成本 (RM)</th>
+                    <th class="num">SST 10% (RM)</th>
+                    <th class="num">含税总计 (RM)</th>
+                </tr>
+            </thead>
+            <tbody>
+                ${actualCost.map(e => `<tr>
+                    <td>${printEscape(e.date || '')}</td>
+                    <td>${printEscape(e.supplier || '')}</td>
+                    <td class="num">${printNum(e.cost)}</td>
+                    <td class="num">${printNum((e.cost || 0) * 0.1)}</td>
+                    <td class="num">${printNum((e.cost || 0) * 1.1)}</td>
+                </tr>`).join('')}
+            </tbody>
+        </table>`}
+        <div class="summary-box">
+            <div class="row"><span>实际成本小计：</span><strong>RM ${printNum(actualCostTotal)}</strong></div>
+            <div class="row"><span>占总销售：</span><strong>${totalSales > 0 ? (actualCostTotal / totalSales * 100).toFixed(2) : '0.00'}%</strong></div>
+        </div>
+    </div>
+
+    <!-- 第5行: 设计费 -->
+    <div class="section">
+        <h2>⑤ 设计费</h2>
+        ${designFee.length === 0 ? '<p class="empty-note">暂无记录</p>' : `
+        <table>
+            <thead><tr><th>日期</th><th>项目</th><th class="num">金额 (RM)</th></tr></thead>
+            <tbody>
+                ${designFee.map(e => `<tr><td>${printEscape(e.date || '')}</td><td>${printEscape(e.name || '')}</td><td class="num">${printNum(e.amount)}</td></tr>`).join('')}
+            </tbody>
+        </table>`}
+        <div class="summary-box">
+            <div class="row"><span>设计费小计：</span><strong>RM ${printNum(designFeeTotal)}</strong></div>
+            <div class="row"><span>占总销售：</span><strong>${totalSales > 0 ? (designFeeTotal / totalSales * 100).toFixed(2) : '0.00'}%</strong></div>
+        </div>
+    </div>
+
+    <!-- 第6行: 安装费 -->
+    <div class="section">
+        <h2>⑥ 安装费</h2>
+        ${installFee.length === 0 ? '<p class="empty-note">暂无记录</p>' : `
+        <table>
+            <thead><tr><th>日期</th><th>项目</th><th class="num">金额 (RM)</th></tr></thead>
+            <tbody>
+                ${installFee.map(e => `<tr><td>${printEscape(e.date || '')}</td><td>${printEscape(e.name || '')}</td><td class="num">${printNum(e.amount)}</td></tr>`).join('')}
+            </tbody>
+        </table>`}
+        <div class="summary-box">
+            <div class="row"><span>安装费小计：</span><strong>RM ${printNum(installFeeTotal)}</strong></div>
+            <div class="row"><span>占总销售：</span><strong>${totalSales > 0 ? (installFeeTotal / totalSales * 100).toFixed(2) : '0.00'}%</strong></div>
+        </div>
+    </div>
+
+    <!-- 第7行: 物流费 -->
+    <div class="section">
+        <h2>⑦ 物流费</h2>
+        ${logisticsFee.length === 0 ? '<p class="empty-note">暂无记录</p>' : `
+        <table>
+            <thead><tr><th>日期</th><th>项目</th><th class="num">金额 (RM)</th></tr></thead>
+            <tbody>
+                ${logisticsFee.map(e => `<tr><td>${printEscape(e.date || '')}</td><td>${printEscape(e.name || '')}</td><td class="num">${printNum(e.amount)}</td></tr>`).join('')}
+            </tbody>
+        </table>`}
+        <div class="summary-box">
+            <div class="row"><span>物流费小计：</span><strong>RM ${printNum(logisticsFeeTotal)}</strong></div>
+            <div class="row"><span>占总销售：</span><strong>${totalSales > 0 ? (logisticsFeeTotal / totalSales * 100).toFixed(2) : '0.00'}%</strong></div>
+        </div>
+    </div>
+
+    <!-- 第8行: 佣金 -->
+    <div class="section">
+        <h2>⑧ 佣金</h2>
+        <div class="commission-grid">
+            <div><strong>主销售</strong>${printNum(commission.sales?.percent || 0)}%<br><strong>RM ${printNum(commission.sales?.amount)}</strong></div>
+            <div><strong>副销售</strong>${printNum(commission.subSales?.percent || 0)}%<br><strong>RM ${printNum(commission.subSales?.amount)}</strong></div>
+            <div><strong>测量师</strong>${printNum(commission.measurer?.percent || 0)}%<br><strong>RM ${printNum(commission.measurer?.amount)}</strong></div>
+            <div><strong>设计师</strong>${printNum(commission.designer?.percent || 0)}%<br><strong>RM ${printNum(commission.designer?.amount)}</strong></div>
+            <div><strong>经理</strong>${printNum(commission.manager?.percent || 0)}%<br><strong>RM ${printNum(commission.manager?.amount)}</strong></div>
+        </div>
+        <div class="summary-box">
+            <div class="row"><span>佣金总计：</span><strong>RM ${printNum(commissionTotal)}</strong></div>
+            <div class="row"><span>占总销售：</span><strong>${totalSales > 0 ? (commissionTotal / totalSales * 100).toFixed(2) : '0.00'}%</strong></div>
+        </div>
+    </div>
+
+    <!-- 第9行: 折损 -->
+    <div class="section">
+        <h2>⑨ 折损</h2>
+        ${loss.length === 0 ? '<p class="empty-note">暂无记录</p>' : `
+        <table>
+            <thead><tr><th>日期</th><th>说明</th><th class="num">金额 (RM)</th></tr></thead>
+            <tbody>
+                ${loss.map(e => `<tr><td>${printEscape(e.date || '')}</td><td>${printEscape(e.note || '')}</td><td class="num">${printNum(e.amount)}</td></tr>`).join('')}
+            </tbody>
+        </table>`}
+        <div class="summary-box">
+            <div class="row"><span>折损小计：</span><strong>RM ${printNum(lossTotal)}</strong></div>
+            <div class="row"><span>占总销售：</span><strong>${totalSales > 0 ? (lossTotal / totalSales * 100).toFixed(2) : '0.00'}%</strong></div>
+        </div>
+    </div>
+
+    <!-- 第10行: 净利润 -->
+    <div class="section">
+        <h2>⑩ 净利润</h2>
+        <div class="summary-box">
+            <div class="row"><span>总销售：</span><strong>RM ${printNum(totalSales)}</strong></div>
+            <div class="row"><span>总成本：</span><strong>RM ${printNum(calculatedCost)}</strong></div>
+            <div class="row total ${profitPercent < 15 ? 'profit-low' : profitPercent < 25 ? 'profit-medium' : ''}">
+                <span>净利润 (${profitPercent.toFixed(2)}%)：</span>
+                <span>RM ${printNum(profit)}</span>
+            </div>
+        </div>
+    </div>
+
+</body>
+</html>`;
+                };
+
                 const openEdit = async (row) => {
                     // 2026-09-15: 优先本地 IDB（一直有用户最新编辑），云端作为 fallback
                     // 之前 bug: 云端无数据时（比如之前 structuredClone 保存失败），editData 全空
@@ -3145,6 +3456,8 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     // 2026-08-23: Excel 式排序 + 浮层筛选
                     sortKey, sortDir, columnFilters, sortedFilteredList, hasActiveFilters, sortArrow, toggleSort, openFilter, closeFilter, hasFilter, clearOneFilter, toggleStatusFilter, clearAllFilters, activeFilter, filterPopoverStyle, filterLabels, filterTypes, statusOptions,
                     formatNumber, filterData, syncFromCloud, userSyncFromCloud, showImportDialog, showExportDialog, openEdit, updateCommission, markComplete, deleteProject, saveProject,
+                    // 2026-09-20: print-to-PDF (单条 — 浏览器原生打印对话框)
+                    printOne,
                     isSyncingFromCloud, lastSyncTime, formatSyncTime,
                     addCostEntry, removeCostEntry, addDesignEntry, removeDesignEntry, addInstallEntry, removeInstallEntry, addLogisticsEntry, removeLogisticsEntry, addLossEntry, removeLossEntry, logout,
                     // 2026-09-15: 重新加载 — 数据丢失手动恢复
