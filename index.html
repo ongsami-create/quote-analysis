@@ -2649,7 +2649,16 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 // 2026-09-20: 数字格式化 (与主页面 formatNumber 一致)
                 const printNum = (n) => (n == null || isNaN(n) ? '0.00' : Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
-                // 2026-09-20: 构建 print-ready HTML (10 行内容)
+                // 2026-09-20: 构建 print-ready HTML (Phase 2 — 加 header / 优化样式 / 签字栏)
+                // 公司信息可改这里 (Phase 2 用户可定制)
+                const PRINT_COMPANY = {
+                    name: 'SQUIRREL DESIGNER',
+                    tagline: 'Custom Furniture & Cabinetry',
+                    address: 'Malaysia',
+                    phone: '+60 xxx-xxx xxxx',
+                    logoUrl: 'https://ongsami-create.github.io/quote-analysis/assets/squirrel-care.png'
+                };
+
                 const buildPrintHtml = (d) => {
                     const c = d.customer || {};
                     const sp = d.salesPerson || {};
@@ -2664,6 +2673,7 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     const totalCost = d.totalCost || 0;
                     const profit = d.profit || (totalSales - totalCost);
                     const profitPercent = d.profitPercent || (totalSales > 0 ? (profit / totalSales * 100) : 0);
+                    const today = new Date().toISOString().split('T')[0];
 
                     // 计算各项小计
                     const actualCostTotal = actualCost.reduce((s, e) => s + (e.cost || 0), 0);
@@ -2675,224 +2685,412 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     const commissionTotal = commissionRoles.reduce((s, r) => s + ((commission[r]?.amount) || 0), 0);
                     const calculatedCost = actualCostTotal + designFeeTotal + installFeeTotal + logisticsFeeTotal + commissionTotal + lossTotal;
 
+                    const profitClass = profitPercent < 15 ? 'profit-low' : (profitPercent < 25 ? 'profit-medium' : 'profit-good');
+
                     return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
 <title>check_${printEscape(d.projNo || '')}</title>
 <style>
+    @page { size: A4; margin: 12mm 12mm 14mm 12mm; }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif; color: #1d1d1f; font-size: 12px; line-height: 1.5; padding: 20px; }
-    h1 { font-size: 20px; margin-bottom: 6px; color: #1d1d1f; }
-    h2 { font-size: 14px; margin: 14px 0 6px; padding: 6px 10px; background: #fafafa; border-left: 3px solid #007AFF; color: #1d1d1f; }
-    .subtitle { color: #6e6e73; font-size: 12px; margin-bottom: 14px; }
-    .section { margin-bottom: 14px; padding: 10px; border: 1px solid #e5e5e7; border-radius: 6px; page-break-inside: avoid; }
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; font-size: 11px; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif;
+        color: #1d1d1f;
+        font-size: 11px;
+        line-height: 1.55;
+        padding: 0;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+    }
+
+    /* === HEADER === */
+    .print-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        padding-bottom: 14px;
+        margin-bottom: 16px;
+        border-bottom: 2px solid #007AFF;
+    }
+    .header-left { display: flex; align-items: center; gap: 14px; flex: 1; }
+    .brand-logo { height: 56px; width: auto; object-fit: contain; }
+    .company-name { font-size: 18px; font-weight: 700; color: #1d1d1f; letter-spacing: -0.01em; }
+    .company-tagline { font-size: 10px; color: #6e6e73; margin-top: 2px; }
+    .company-detail { font-size: 10px; color: #6e6e73; margin-top: 2px; }
+    .header-right { text-align: right; min-width: 180px; }
+    .doc-title { font-size: 18px; font-weight: 700; color: #007AFF; letter-spacing: 0.02em; }
+    .doc-subtitle { font-size: 9px; color: #6e6e73; text-transform: uppercase; letter-spacing: 0.1em; margin-top: 2px; }
+    .doc-meta { font-size: 10px; color: #1d1d1f; margin-top: 6px; line-height: 1.6; }
+    .doc-meta strong { color: #6e6e73; font-weight: 500; margin-right: 4px; }
+    .status-badge {
+        display: inline-block;
+        padding: 1px 8px;
+        border-radius: 8px;
+        font-size: 9px;
+        font-weight: 600;
+        background: rgba(0, 122, 255, 0.12);
+        color: #0066d6;
+    }
+    .status-badge.completed { background: rgba(52, 199, 89, 0.18); color: #1f7a3a; }
+
+    /* === SECTIONS === */
+    .section {
+        margin-bottom: 12px;
+        padding: 10px 12px;
+        border: 1px solid #d8d8dc;
+        border-radius: 6px;
+        page-break-inside: avoid;
+        background: #fff;
+    }
+    .section-title {
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 8px;
+        padding: 5px 10px;
+        background: linear-gradient(90deg, rgba(0, 122, 255, 0.08) 0%, rgba(0, 122, 255, 0.02) 100%);
+        border-left: 3px solid #007AFF;
+        color: #1d1d1f;
+        letter-spacing: 0.01em;
+        border-radius: 2px;
+    }
+    .section-title .num { color: #007AFF; margin-right: 4px; }
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 16px; font-size: 11px; }
     .grid-2 div { padding: 2px 0; }
-    .grid-2 strong { color: #6e6e73; margin-right: 4px; font-weight: 500; }
-    table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 6px; }
-    th, td { padding: 5px 6px; border-bottom: 1px solid #e5e5e7; text-align: left; }
-    th { background: #fafafa; font-weight: 600; color: #6e6e73; text-transform: uppercase; font-size: 9px; }
-    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
-    .item-name { font-weight: 500; }
-    .item-desc { color: #6e6e73; font-size: 9px; }
-    .summary-box { background: #fafafa; padding: 10px; border-radius: 6px; margin-top: 10px; }
+    .grid-2 strong { color: #6e6e73; margin-right: 6px; font-weight: 500; min-width: 56px; display: inline-block; }
+
+    /* === TABLES === */
+    table { width: 100%; border-collapse: collapse; font-size: 10px; margin-top: 4px; }
+    thead { display: table-header-group; } /* 跨页时重复表头 */
+    th, td {
+        padding: 5px 7px;
+        border: 1px solid #c8c8cc;
+        text-align: left;
+    }
+    th {
+        background: #f0f0f3;
+        font-weight: 600;
+        color: #1d1d1f;
+        font-size: 10px;
+        letter-spacing: 0.02em;
+    }
+    td { color: #1d1d1f; }
+    tbody tr:nth-child(even) td { background: #fafafb; } /* 斑马纹 */
+    tbody tr { page-break-inside: avoid; } /* 防止行被分页截断 */
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .item-name { font-weight: 600; }
+    .item-desc { color: #6e6e73; font-size: 9px; display: block; margin-top: 1px; }
+
+    /* === SUMMARY BOX === */
+    .summary-box { background: #f5f5f7; padding: 8px 12px; border-radius: 5px; margin-top: 8px; }
     .summary-box .row { display: flex; justify-content: space-between; padding: 3px 0; font-size: 11px; }
-    .summary-box .row.total { border-top: 1px solid #e5e5e7; margin-top: 6px; padding-top: 6px; font-weight: 700; font-size: 13px; color: #007AFF; }
-    .summary-box .row.profit-low { color: #FF3B30; }
-    .summary-box .row.profit-medium { color: #FF9500; }
+    .summary-box .row span:first-child { color: #6e6e73; }
+    .summary-box .row.total {
+        border-top: 1.5px solid #1d1d1f;
+        margin-top: 6px;
+        padding-top: 6px;
+        font-weight: 700;
+        font-size: 14px;
+        color: #007AFF;
+    }
+    .summary-box .row.total span:first-child { color: #1d1d1f; }
+
+    /* === PROFIT COLORS === */
+    .profit-low { color: #FF3B30 !important; }
+    .profit-medium { color: #FF9500 !important; }
+    .profit-good { color: #1f7a3a !important; }
+
+    /* === COMMISSION GRID === */
     .commission-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; font-size: 10px; }
-    .commission-grid div { padding: 4px; background: #fafafa; border-radius: 4px; }
-    .commission-grid strong { display: block; color: #6e6e73; font-size: 9px; margin-bottom: 2px; }
-    .empty-note { color: #999; font-size: 10px; font-style: italic; padding: 4px 0; }
-    .page-break { page-break-before: always; }
+    .commission-grid > div {
+        padding: 6px 8px;
+        background: #f5f5f7;
+        border-radius: 4px;
+        border: 1px solid #e8e8ec;
+    }
+    .commission-grid .role { display: block; color: #6e6e73; font-size: 9px; margin-bottom: 2px; font-weight: 500; }
+    .commission-grid .pct { color: #007AFF; font-weight: 600; font-size: 10px; }
+    .commission-grid .amt { display: block; font-weight: 700; font-size: 12px; color: #1d1d1f; margin-top: 2px; }
+
+    /* === EMPTY === */
+    .empty-note { color: #999; font-size: 10px; font-style: italic; padding: 6px 0; text-align: center; }
+
+    /* === SIGNATURE (footer) === */
+    .signature-section {
+        margin-top: 24px;
+        padding-top: 14px;
+        border-top: 1px dashed #c8c8cc;
+        page-break-inside: avoid;
+    }
+    .signature-title {
+        font-size: 11px;
+        font-weight: 600;
+        color: #6e6e73;
+        margin-bottom: 14px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+    }
+    .signature-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 18px;
+    }
+    .sig-block { display: flex; flex-direction: column; }
+    .sig-label {
+        font-size: 10px;
+        font-weight: 600;
+        color: #1d1d1f;
+        margin-bottom: 4px;
+    }
+    .sig-line {
+        height: 50px;
+        border-bottom: 1.5px solid #1d1d1f;
+        margin-bottom: 4px;
+    }
+    .sig-name {
+        font-size: 10px;
+        color: #6e6e73;
+        min-height: 14px;
+    }
+    .sig-date {
+        font-size: 9px;
+        color: #999;
+        margin-top: 2px;
+    }
+
+    /* === FOOTER (page number) === */
     @media print {
-        body { padding: 0; }
-        .section { border-color: #ccc; }
+        body { font-size: 10.5px; }
     }
 </style>
 </head>
 <body>
-    <h1>📋 报价分析 — ${printEscape(d.projNo || '')}</h1>
-    <p class="subtitle">客户：${printEscape(d.customerName || c.name || '')} · 业务员：${printEscape(sp.name || '')} · 状态：${printEscape(d.status === 'completed' ? '已完成' : '进行中')}</p>
 
-    <!-- 第1行: 客户信息 -->
-    <div class="section">
-        <h2>① 客户信息</h2>
-        <div class="grid-2">
-            <div><strong>姓名：</strong>${printEscape(c.name || '')}</div>
-            <div><strong>电话：</strong>${printEscape(c.phone || '')}</div>
-            <div><strong>IC：</strong>${printEscape(c.ic || '')}</div>
-            <div><strong>日期：</strong>${printEscape(c.date || '')}</div>
-            <div style="grid-column: 1 / -1;"><strong>地址：</strong>${printEscape(c.address || '')}</div>
+<!-- HEADER -->
+<div class="print-header">
+    <div class="header-left">
+        <img src="${PRINT_COMPANY.logoUrl}" alt="Logo" class="brand-logo" onerror="this.style.display='none'" />
+        <div>
+            <div class="company-name">${printEscape(PRINT_COMPANY.name)}</div>
+            <div class="company-tagline">${printEscape(PRINT_COMPANY.tagline)}</div>
+            <div class="company-detail">📍 ${printEscape(PRINT_COMPANY.address)}</div>
+            <div class="company-detail">📞 ${printEscape(PRINT_COMPANY.phone)}</div>
         </div>
     </div>
-
-    <!-- 第2行: 业务员 -->
-    <div class="section">
-        <h2>② 业务员</h2>
-        <div class="grid-2">
-            <div><strong>主销售：</strong>${printEscape(sp.name || '')}${sp.phone ? ' (' + printEscape(sp.phone) + ')' : ''}</div>
-            <div><strong>副销售：</strong>${printEscape(sp.subSales || '')}</div>
-            <div><strong>测量师：</strong>${printEscape(sp.measurer || '')}</div>
-            <div><strong>设计师：</strong>${printEscape(sp.designer || '')}</div>
+    <div class="header-right">
+        <div class="doc-title">报价分析报告</div>
+        <div class="doc-subtitle">Quotation Analysis</div>
+        <div class="doc-meta">
+            <div><strong>编号：</strong>${printEscape(d.projNo || '')}</div>
+            <div><strong>日期：</strong>${printEscape(today)}</div>
+            <div><strong>状态：</strong><span class="status-badge ${d.status === 'completed' ? 'completed' : ''}">${printEscape(d.status === 'completed' ? '已完成' : '进行中')}</span></div>
         </div>
     </div>
+</div>
 
-    <!-- 第3行: 报价明细 -->
-    <div class="section">
-        <h2>③ 报价明细 (${items.length} 项)</h2>
-        ${items.length === 0 ? '<p class="empty-note">暂无明细</p>' : `
-        <table>
-            <thead>
-                <tr>
-                    <th>区域</th>
-                    <th>项目</th>
-                    <th>描述</th>
-                    <th class="num">宽×高×深</th>
-                    <th class="num">面积</th>
-                    <th class="num">数量</th>
-                    <th class="num">单价</th>
-                    <th class="num">总价</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${items.map(item => `<tr>
-                    <td>${printEscape(item.area || '')}</td>
-                    <td><span class="item-name">${printEscape(item.itemBZh || item.itemB || '')}</span></td>
-                    <td><span class="item-desc">${printEscape(item.description || '')}</span></td>
-                    <td class="num">${item.w || 0}×${item.h || 0}×${item.d || 0}</td>
-                    <td class="num">${(item.value || 0).toFixed(2)}</td>
-                    <td class="num">${item.qty || 1}</td>
-                    <td class="num">RM ${printNum(item.unitPrice)}</td>
-                    <td class="num">RM ${printNum(item.total)}</td>
-                </tr>`).join('')}
-            </tbody>
-        </table>`}
+<!-- 第1行: 客户信息 -->
+<div class="section">
+    <div class="section-title"><span class="num">①</span>客户信息</div>
+    <div class="grid-2">
+        <div><strong>姓名：</strong>${printEscape(c.name || '')}</div>
+        <div><strong>电话：</strong>${printEscape(c.phone || '')}</div>
+        <div><strong>IC：</strong>${printEscape(c.ic || '')}</div>
+        <div><strong>报价日期：</strong>${printEscape(c.date || '')}</div>
+        <div style="grid-column: 1 / -1;"><strong>地址：</strong>${printEscape(c.address || '')}</div>
     </div>
+</div>
 
-    <!-- 第4行: 实际成本 (SST 10%) -->
-    <div class="section">
-        <h2>④ 实际成本 (SST 10%)</h2>
-        ${actualCost.length === 0 ? '<p class="empty-note">暂无记录</p>' : `
-        <table>
-            <thead>
-                <tr>
-                    <th>日期</th>
-                    <th>供应商</th>
-                    <th class="num">成本 (RM)</th>
-                    <th class="num">SST 10% (RM)</th>
-                    <th class="num">含税总计 (RM)</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${actualCost.map(e => `<tr>
-                    <td>${printEscape(e.date || '')}</td>
-                    <td>${printEscape(e.supplier || '')}</td>
-                    <td class="num">${printNum(e.cost)}</td>
-                    <td class="num">${printNum((e.cost || 0) * 0.1)}</td>
-                    <td class="num">${printNum((e.cost || 0) * 1.1)}</td>
-                </tr>`).join('')}
-            </tbody>
-        </table>`}
-        <div class="summary-box">
-            <div class="row"><span>实际成本小计：</span><strong>RM ${printNum(actualCostTotal)}</strong></div>
-            <div class="row"><span>占总销售：</span><strong>${totalSales > 0 ? (actualCostTotal / totalSales * 100).toFixed(2) : '0.00'}%</strong></div>
+<!-- 第2行: 业务员 -->
+<div class="section">
+    <div class="section-title"><span class="num">②</span>业务员</div>
+    <div class="grid-2">
+        <div><strong>主销售：</strong>${printEscape(sp.name || '')}${sp.phone ? ' (' + printEscape(sp.phone) + ')' : ''}</div>
+        <div><strong>副销售：</strong>${printEscape(sp.subSales || '')}</div>
+        <div><strong>测量师：</strong>${printEscape(sp.measurer || '')}</div>
+        <div><strong>设计师：</strong>${printEscape(sp.designer || '')}</div>
+    </div>
+</div>
+
+<!-- 第3行: 报价明细 -->
+<div class="section">
+    <div class="section-title"><span class="num">③</span>报价明细 (${items.length} 项)</div>
+    ${items.length === 0 ? '<p class="empty-note">暂无明细</p>' : `
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 8%;">区域</th>
+                <th style="width: 14%;">项目</th>
+                <th>描述</th>
+                <th class="num" style="width: 11%;">宽×高×深</th>
+                <th class="num" style="width: 7%;">面积</th>
+                <th class="num" style="width: 5%;">数量</th>
+                <th class="num" style="width: 11%;">单价</th>
+                <th class="num" style="width: 12%;">总价</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${items.map(item => `<tr>
+                <td>${printEscape(item.area || '')}</td>
+                <td><span class="item-name">${printEscape(item.itemBZh || item.itemB || '')}</span><span class="item-desc">${printEscape(item.description || '')}</span></td>
+                <td></td>
+                <td class="num">${item.w || 0}×${item.h || 0}×${item.d || 0}</td>
+                <td class="num">${(item.value || 0).toFixed(2)}</td>
+                <td class="num">${item.qty || 1}</td>
+                <td class="num">RM ${printNum(item.unitPrice)}</td>
+                <td class="num">RM ${printNum(item.total)}</td>
+            </tr>`).join('')}
+        </tbody>
+    </table>`}
+</div>
+
+<!-- 第4行: 实际成本 (SST 10%) -->
+<div class="section">
+    <div class="section-title"><span class="num">④</span>实际成本 (含 SST 10%)</div>
+    ${actualCost.length === 0 ? '<p class="empty-note">暂无记录</p>' : `
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 14%;">日期</th>
+                <th>供应商</th>
+                <th class="num" style="width: 14%;">成本</th>
+                <th class="num" style="width: 14%;">SST 10%</th>
+                <th class="num" style="width: 16%;">含税总计</th>
+            </tr>
+        </thead>
+        <tbody>
+            ${actualCost.map(e => `<tr>
+                <td>${printEscape(e.date || '')}</td>
+                <td>${printEscape(e.supplier || '')}</td>
+                <td class="num">RM ${printNum(e.cost)}</td>
+                <td class="num">RM ${printNum((e.cost || 0) * 0.1)}</td>
+                <td class="num">RM ${printNum((e.cost || 0) * 1.1)}</td>
+            </tr>`).join('')}
+        </tbody>
+    </table>`}
+    <div class="summary-box">
+        <div class="row"><span>实际成本小计：</span><strong>RM ${printNum(actualCostTotal)}</strong></div>
+        <div class="row"><span>占总销售：</span><strong>${totalSales > 0 ? (actualCostTotal / totalSales * 100).toFixed(2) : '0.00'}%</strong></div>
+    </div>
+</div>
+
+<!-- 第5行: 设计费 -->
+<div class="section">
+    <div class="section-title"><span class="num">⑤</span>设计费</div>
+    ${designFee.length === 0 ? '<p class="empty-note">暂无记录</p>' : `
+    <table>
+        <thead><tr><th style="width: 18%;">日期</th><th>项目</th><th class="num" style="width: 22%;">金额</th></tr></thead>
+        <tbody>
+            ${designFee.map(e => `<tr><td>${printEscape(e.date || '')}</td><td>${printEscape(e.name || '')}</td><td class="num">RM ${printNum(e.amount)}</td></tr>`).join('')}
+        </tbody>
+    </table>`}
+    <div class="summary-box">
+        <div class="row"><span>设计费小计：</span><strong>RM ${printNum(designFeeTotal)}</strong></div>
+        <div class="row"><span>占总销售：</span><strong>${totalSales > 0 ? (designFeeTotal / totalSales * 100).toFixed(2) : '0.00'}%</strong></div>
+    </div>
+</div>
+
+<!-- 第6行: 安装费 -->
+<div class="section">
+    <div class="section-title"><span class="num">⑥</span>安装费</div>
+    ${installFee.length === 0 ? '<p class="empty-note">暂无记录</p>' : `
+    <table>
+        <thead><tr><th style="width: 18%;">日期</th><th>项目</th><th class="num" style="width: 22%;">金额</th></tr></thead>
+        <tbody>
+            ${installFee.map(e => `<tr><td>${printEscape(e.date || '')}</td><td>${printEscape(e.name || '')}</td><td class="num">RM ${printNum(e.amount)}</td></tr>`).join('')}
+        </tbody>
+    </table>`}
+    <div class="summary-box">
+        <div class="row"><span>安装费小计：</span><strong>RM ${printNum(installFeeTotal)}</strong></div>
+        <div class="row"><span>占总销售：</span><strong>${totalSales > 0 ? (installFeeTotal / totalSales * 100).toFixed(2) : '0.00'}%</strong></div>
+    </div>
+</div>
+
+<!-- 第7行: 物流费 -->
+<div class="section">
+    <div class="section-title"><span class="num">⑦</span>物流费</div>
+    ${logisticsFee.length === 0 ? '<p class="empty-note">暂无记录</p>' : `
+    <table>
+        <thead><tr><th style="width: 18%;">日期</th><th>项目</th><th class="num" style="width: 22%;">金额</th></tr></thead>
+        <tbody>
+            ${logisticsFee.map(e => `<tr><td>${printEscape(e.date || '')}</td><td>${printEscape(e.name || '')}</td><td class="num">RM ${printNum(e.amount)}</td></tr>`).join('')}
+        </tbody>
+    </table>`}
+    <div class="summary-box">
+        <div class="row"><span>物流费小计：</span><strong>RM ${printNum(logisticsFeeTotal)}</strong></div>
+        <div class="row"><span>占总销售：</span><strong>${totalSales > 0 ? (logisticsFeeTotal / totalSales * 100).toFixed(2) : '0.00'}%</strong></div>
+    </div>
+</div>
+
+<!-- 第8行: 佣金 -->
+<div class="section">
+    <div class="section-title"><span class="num">⑧</span>佣金</div>
+    <div class="commission-grid">
+        <div><span class="role">主销售</span><span class="pct">${printNum(commission.sales?.percent || 0)}%</span><span class="amt">RM ${printNum(commission.sales?.amount)}</span></div>
+        <div><span class="role">副销售</span><span class="pct">${printNum(commission.subSales?.percent || 0)}%</span><span class="amt">RM ${printNum(commission.subSales?.amount)}</span></div>
+        <div><span class="role">测量师</span><span class="pct">${printNum(commission.measurer?.percent || 0)}%</span><span class="amt">RM ${printNum(commission.measurer?.amount)}</span></div>
+        <div><span class="role">设计师</span><span class="pct">${printNum(commission.designer?.percent || 0)}%</span><span class="amt">RM ${printNum(commission.designer?.amount)}</span></div>
+        <div><span class="role">经理</span><span class="pct">${printNum(commission.manager?.percent || 0)}%</span><span class="amt">RM ${printNum(commission.manager?.amount)}</span></div>
+    </div>
+    <div class="summary-box">
+        <div class="row"><span>佣金总计：</span><strong>RM ${printNum(commissionTotal)}</strong></div>
+        <div class="row"><span>占总销售：</span><strong>${totalSales > 0 ? (commissionTotal / totalSales * 100).toFixed(2) : '0.00'}%</strong></div>
+    </div>
+</div>
+
+<!-- 第9行: 折损 -->
+<div class="section">
+    <div class="section-title"><span class="num">⑨</span>折损</div>
+    ${loss.length === 0 ? '<p class="empty-note">暂无记录</p>' : `
+    <table>
+        <thead><tr><th style="width: 18%;">日期</th><th>说明</th><th class="num" style="width: 22%;">金额</th></tr></thead>
+        <tbody>
+            ${loss.map(e => `<tr><td>${printEscape(e.date || '')}</td><td>${printEscape(e.note || '')}</td><td class="num">RM ${printNum(e.amount)}</td></tr>`).join('')}
+        </tbody>
+    </table>`}
+    <div class="summary-box">
+        <div class="row"><span>折损小计：</span><strong>RM ${printNum(lossTotal)}</strong></div>
+        <div class="row"><span>占总销售：</span><strong>${totalSales > 0 ? (lossTotal / totalSales * 100).toFixed(2) : '0.00'}%</strong></div>
+    </div>
+</div>
+
+<!-- 第10行: 净利润 -->
+<div class="section">
+    <div class="section-title"><span class="num">⑩</span>净利润</div>
+    <div class="summary-box">
+        <div class="row"><span>总销售：</span><strong>RM ${printNum(totalSales)}</strong></div>
+        <div class="row"><span>总成本 (成本+设计+安装+物流+佣金+折损)：</span><strong>RM ${printNum(calculatedCost)}</strong></div>
+        <div class="row total ${profitClass}">
+            <span>净利润 (${profitPercent.toFixed(2)}%)：</span>
+            <span>RM ${printNum(profit)}</span>
         </div>
     </div>
+</div>
 
-    <!-- 第5行: 设计费 -->
-    <div class="section">
-        <h2>⑤ 设计费</h2>
-        ${designFee.length === 0 ? '<p class="empty-note">暂无记录</p>' : `
-        <table>
-            <thead><tr><th>日期</th><th>项目</th><th class="num">金额 (RM)</th></tr></thead>
-            <tbody>
-                ${designFee.map(e => `<tr><td>${printEscape(e.date || '')}</td><td>${printEscape(e.name || '')}</td><td class="num">${printNum(e.amount)}</td></tr>`).join('')}
-            </tbody>
-        </table>`}
-        <div class="summary-box">
-            <div class="row"><span>设计费小计：</span><strong>RM ${printNum(designFeeTotal)}</strong></div>
-            <div class="row"><span>占总销售：</span><strong>${totalSales > 0 ? (designFeeTotal / totalSales * 100).toFixed(2) : '0.00'}%</strong></div>
+<!-- SIGNATURE SECTION -->
+<div class="signature-section">
+    <div class="signature-title">审核签字 · Approval & Signature</div>
+    <div class="signature-grid">
+        <div class="sig-block">
+            <div class="sig-label">客户签字 / Customer</div>
+            <div class="sig-line"></div>
+            <div class="sig-name">${printEscape(c.name || '')}</div>
+            <div class="sig-date">日期 / Date: ___________________</div>
+        </div>
+        <div class="sig-block">
+            <div class="sig-label">业务员 / Salesperson</div>
+            <div class="sig-line"></div>
+            <div class="sig-name">${printEscape(sp.name || '')}</div>
+            <div class="sig-date">日期 / Date: ___________________</div>
+        </div>
+        <div class="sig-block">
+            <div class="sig-label">审核 / Approved By</div>
+            <div class="sig-line"></div>
+            <div class="sig-name">&nbsp;</div>
+            <div class="sig-date">日期 / Date: ___________________</div>
         </div>
     </div>
-
-    <!-- 第6行: 安装费 -->
-    <div class="section">
-        <h2>⑥ 安装费</h2>
-        ${installFee.length === 0 ? '<p class="empty-note">暂无记录</p>' : `
-        <table>
-            <thead><tr><th>日期</th><th>项目</th><th class="num">金额 (RM)</th></tr></thead>
-            <tbody>
-                ${installFee.map(e => `<tr><td>${printEscape(e.date || '')}</td><td>${printEscape(e.name || '')}</td><td class="num">${printNum(e.amount)}</td></tr>`).join('')}
-            </tbody>
-        </table>`}
-        <div class="summary-box">
-            <div class="row"><span>安装费小计：</span><strong>RM ${printNum(installFeeTotal)}</strong></div>
-            <div class="row"><span>占总销售：</span><strong>${totalSales > 0 ? (installFeeTotal / totalSales * 100).toFixed(2) : '0.00'}%</strong></div>
-        </div>
-    </div>
-
-    <!-- 第7行: 物流费 -->
-    <div class="section">
-        <h2>⑦ 物流费</h2>
-        ${logisticsFee.length === 0 ? '<p class="empty-note">暂无记录</p>' : `
-        <table>
-            <thead><tr><th>日期</th><th>项目</th><th class="num">金额 (RM)</th></tr></thead>
-            <tbody>
-                ${logisticsFee.map(e => `<tr><td>${printEscape(e.date || '')}</td><td>${printEscape(e.name || '')}</td><td class="num">${printNum(e.amount)}</td></tr>`).join('')}
-            </tbody>
-        </table>`}
-        <div class="summary-box">
-            <div class="row"><span>物流费小计：</span><strong>RM ${printNum(logisticsFeeTotal)}</strong></div>
-            <div class="row"><span>占总销售：</span><strong>${totalSales > 0 ? (logisticsFeeTotal / totalSales * 100).toFixed(2) : '0.00'}%</strong></div>
-        </div>
-    </div>
-
-    <!-- 第8行: 佣金 -->
-    <div class="section">
-        <h2>⑧ 佣金</h2>
-        <div class="commission-grid">
-            <div><strong>主销售</strong>${printNum(commission.sales?.percent || 0)}%<br><strong>RM ${printNum(commission.sales?.amount)}</strong></div>
-            <div><strong>副销售</strong>${printNum(commission.subSales?.percent || 0)}%<br><strong>RM ${printNum(commission.subSales?.amount)}</strong></div>
-            <div><strong>测量师</strong>${printNum(commission.measurer?.percent || 0)}%<br><strong>RM ${printNum(commission.measurer?.amount)}</strong></div>
-            <div><strong>设计师</strong>${printNum(commission.designer?.percent || 0)}%<br><strong>RM ${printNum(commission.designer?.amount)}</strong></div>
-            <div><strong>经理</strong>${printNum(commission.manager?.percent || 0)}%<br><strong>RM ${printNum(commission.manager?.amount)}</strong></div>
-        </div>
-        <div class="summary-box">
-            <div class="row"><span>佣金总计：</span><strong>RM ${printNum(commissionTotal)}</strong></div>
-            <div class="row"><span>占总销售：</span><strong>${totalSales > 0 ? (commissionTotal / totalSales * 100).toFixed(2) : '0.00'}%</strong></div>
-        </div>
-    </div>
-
-    <!-- 第9行: 折损 -->
-    <div class="section">
-        <h2>⑨ 折损</h2>
-        ${loss.length === 0 ? '<p class="empty-note">暂无记录</p>' : `
-        <table>
-            <thead><tr><th>日期</th><th>说明</th><th class="num">金额 (RM)</th></tr></thead>
-            <tbody>
-                ${loss.map(e => `<tr><td>${printEscape(e.date || '')}</td><td>${printEscape(e.note || '')}</td><td class="num">${printNum(e.amount)}</td></tr>`).join('')}
-            </tbody>
-        </table>`}
-        <div class="summary-box">
-            <div class="row"><span>折损小计：</span><strong>RM ${printNum(lossTotal)}</strong></div>
-            <div class="row"><span>占总销售：</span><strong>${totalSales > 0 ? (lossTotal / totalSales * 100).toFixed(2) : '0.00'}%</strong></div>
-        </div>
-    </div>
-
-    <!-- 第10行: 净利润 -->
-    <div class="section">
-        <h2>⑩ 净利润</h2>
-        <div class="summary-box">
-            <div class="row"><span>总销售：</span><strong>RM ${printNum(totalSales)}</strong></div>
-            <div class="row"><span>总成本：</span><strong>RM ${printNum(calculatedCost)}</strong></div>
-            <div class="row total ${profitPercent < 15 ? 'profit-low' : profitPercent < 25 ? 'profit-medium' : ''}">
-                <span>净利润 (${profitPercent.toFixed(2)}%)：</span>
-                <span>RM ${printNum(profit)}</span>
-            </div>
-        </div>
-    </div>
+</div>
 
 </body>
 </html>`;
