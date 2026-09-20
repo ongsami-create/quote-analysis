@@ -2650,12 +2650,16 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 const printNum = (n) => (n == null || isNaN(n) ? '0.00' : Number(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
                 // 2026-09-20: 构建 print-ready HTML (Phase 2 — 加 header / 优化样式 / 签字栏)
-                // 公司信息可改这里 (Phase 2 用户可定制)
+                // 2026-09-20: 用户提供真实公司信息 — VIDI FURNITURE SDN BHD
                 const PRINT_COMPANY = {
-                    name: 'SQUIRREL DESIGNER',
-                    tagline: 'Custom Furniture & Cabinetry',
-                    address: 'Malaysia',
-                    phone: '+60 xxx-xxx xxxx',
+                    name: 'VIDI FURNITURE SDN BHD',
+                    regNo: '502683P',
+                    addressLines: [
+                        '104 TO 110 JALAN SRI SULONG 1',
+                        'TAMAN INDUSTRI SRI SULONG',
+                        '83500 PARIT SULONG, JOHOR'
+                    ],
+                    phone: '+6074101558',
                     logoUrl: 'https://ongsami-create.github.io/quote-analysis/assets/squirrel-care.png'
                 };
 
@@ -2872,10 +2876,9 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
     <div class="header-left">
         <img src="${PRINT_COMPANY.logoUrl}" alt="Logo" class="brand-logo" onerror="this.style.display='none'" />
         <div>
-            <div class="company-name">${printEscape(PRINT_COMPANY.name)}</div>
-            <div class="company-tagline">${printEscape(PRINT_COMPANY.tagline)}</div>
-            <div class="company-detail">📍 ${printEscape(PRINT_COMPANY.address)}</div>
-            <div class="company-detail">📞 ${printEscape(PRINT_COMPANY.phone)}</div>
+            <div class="company-name">${printEscape(PRINT_COMPANY.name)} <span style="font-size: 12px; font-weight: 500; color: #6e6e73;">(${printEscape(PRINT_COMPANY.regNo)})</span></div>
+            ${PRINT_COMPANY.addressLines.map(line => `<div class="company-detail">${printEscape(line)}</div>`).join('')}
+            <div class="company-detail">📞 Tel: ${printEscape(PRINT_COMPANY.phone)}</div>
         </div>
     </div>
     <div class="header-right">
