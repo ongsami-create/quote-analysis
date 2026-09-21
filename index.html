@@ -2668,42 +2668,62 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
 
                 // 2026-09-20: print-to-PDF — 浏览器原生打印对话框, 0 CDN 依赖, 用户另存为 PDF 即可
                 // 流程: 拿完整数据 → 构建 iframe → 写入 print-ready HTML → 调用 iframe.contentWindow.print()
+                // 2026-09-21: 性能优化 — printOne 用内存缓存 + 复用 iframe + 缓存 print HTML
+                // 1. 优先用 quoteFullCache (B) → 毫秒级
+                // 2. print HTML 字符串缓存 → 同 quote 重复点 PDF 不重生成
+                // 3. 单一 iframe 复用 → 不每次重建 DOM
+                let printIframe = null;  // 单一复用
+                const printHtmlCache = new Map();  // projNo → HTML 字符串
+
                 const printOne = async (row) => {
                     if (!row || !row.projNo) {
                         alert('无效的报价数据');
                         return;
                     }
-                    // 拿完整数据 (本地 IDB → 云端 → listData summary)
-                    let data = await getQuoteFromLocal(row.projNo);
-                    if (data && isCompleteData(data)) {
-                        // 用本地数据
-                    } else if (navigator.onLine) {
-                        try {
-                            const result = await gasCall('get_check_quote', { projNo: row.projNo });
-                            if (result.success && result.quote) {
-                                data = buildNewDataFromRaw(result.quote, row.projNo);
-                            }
-                        } catch (e) {
-                            console.warn('[printOne] cloud fetch failed:', e);
-                        }
-                    }
+                    const projNo = row.projNo;
+
+                    // 2026-09-21 B: 优先用内存缓存 (毫秒级)
+                    let data = quoteFullCache.get(projNo);
                     if (!data) {
-                        // 兜底: 用 listData summary
-                        data = row;
+                        // 回退到 IDB / 云端 (跟 openEdit 一样的 fallback 链)
+                        data = await getQuoteFromLocal(projNo);
+                        if (data && isCompleteData(data)) {
+                            quoteFullCache.set(projNo, clone(data));
+                        } else if (navigator.onLine) {
+                            try {
+                                const result = await gasCall('get_check_quote', { projNo });
+                                if (result.success && result.quote) {
+                                    data = buildNewDataFromRaw(result.quote, projNo);
+                                    quoteFullCache.set(projNo, clone(data));
+                                }
+                            } catch (e) {
+                                console.warn('[printOne] cloud fetch failed:', e);
+                            }
+                        }
+                        if (!data) data = row;  // 兜底: listData summary
                     }
 
-                    // 构建 iframe
-                    const iframe = document.createElement('iframe');
-                    iframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1123px;border:none;';
-                    document.body.appendChild(iframe);
+                    // 复用 iframe (一次创建, 后续只更新内容)
+                    if (!printIframe || !printIframe.parentNode) {
+                        printIframe = document.createElement('iframe');
+                        printIframe.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;height:1123px;border:none;';
+                        document.body.appendChild(printIframe);
+                    }
+
+                    // 缓存 print HTML 字符串 — 同 quote 不重生成
+                    let html = printHtmlCache.get(projNo);
+                    if (!html) {
+                        html = buildPrintHtml(data);
+                        printHtmlCache.set(projNo, html);
+                    }
 
                     // 写入 HTML
-                    const doc = iframe.contentDocument || iframe.contentWindow.document;
-                    const pdfTitle = 'check_' + (data.projNo || 'quote');
+                    const doc = printIframe.contentDocument || printIframe.contentWindow.document;
+                    const pdfTitle = 'check_' + (projNo || 'quote');
                     doc.open();
-                    doc.write(buildPrintHtml(data));
+                    doc.write(html);
                     doc.close();
-                    // 2026-09-20: 强制设 title (Chrome 保存 PDF 文件名来源) — 多重保险
+                    // 多重保险设 title (Chrome 保存 PDF 文件名来源)
                     try {
                         doc.title = pdfTitle;
                         const head = doc.head || doc.getElementsByTagName('head')[0];
@@ -2714,21 +2734,16 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                         }
                     } catch (e) { console.warn('[printOne] setTitle failed:', e); }
 
-                    // 等 iframe 加载完触发打印
-                    iframe.onload = () => {
+                    // 触发打印
+                    printIframe.onload = () => {
                         try {
-                            // 再设一次, 确保生效
-                            try { iframe.contentDocument.title = pdfTitle; } catch (e) {}
-                            iframe.contentWindow.focus();
-                            iframe.contentWindow.print();
+                            try { printIframe.contentDocument.title = pdfTitle; } catch (e) {}
+                            printIframe.contentWindow.focus();
+                            printIframe.contentWindow.print();
                         } catch (e) {
                             console.error('[printOne] print() failed:', e);
                             alert('打开打印对话框失败：' + e.message);
                         }
-                        // 延迟移除 (Chrome 关闭对话框后 iframe 还能用一会儿)
-                        setTimeout(() => {
-                            if (iframe.parentNode) iframe.parentNode.removeChild(iframe);
-                        }, 2000);
                     };
                 };
 
@@ -3662,6 +3677,8 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                         await saveQuoteToLocal(editData.value);
                         // 更新内存缓存 (B)
                         quoteFullCache.set(projNo, clone(editData.value));
+                        // 失效 print HTML 缓存 — 下次打印会重新生成
+                        printHtmlCache.delete(projNo);
                         console.log('[saveProject] local save OK');
 
                         // 2. 关闭弹窗 — 不再 await 云端, 立即关闭让用户体验快 (A)
