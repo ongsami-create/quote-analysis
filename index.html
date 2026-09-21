@@ -950,6 +950,12 @@
                     </button>
                 </div>
                 <div class="sync-controls">
+                    <span v-if="pendingCloudSyncs.length > 0 || preloading" class="sync-time" style="background: rgba(255, 149, 0, 0.15); color: #b36300; padding: 4px 10px; border-radius: 999px;">
+                        <span v-if="pendingCloudSyncs.length > 0" class="sync-spinner">⏳</span>
+                        <span v-if="preloading">🔄</span>
+                        <span v-if="pendingCloudSyncs.length > 0">同步中 {{ pendingCloudSyncs.length }} 个</span>
+                        <span v-if="preloading">预加载中</span>
+                    </span>
                     <button class="btn btn-secondary" @click="userSyncFromCloud" :disabled="isSyncingFromCloud">
                         <span v-if="isSyncingFromCloud" class="sync-spinner">⏳</span>
                         <span v-else>🔄</span>
@@ -2305,6 +2311,13 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 const isSyncingFromCloud = ref(false);
                 const lastSyncTime = ref(null);
 
+                // 2026-09-21: 性能优化 — quote 完整数据内存缓存 (B)
+                // 第一次从 GAS/IDB 拉到后存这里, 之后 openEdit 直接秒开
+                const quoteFullCache = new Map();
+                // 2026-09-21: 后台同步状态 — 顶栏显示"同步中 X 个" (A)
+                const pendingCloudSyncs = ref([]);  // [{projNo, startedAt, status}]
+                const preloading = ref(false);  // 预加载进行中 (C)
+
                 const syncFromCloud = async () => {
                     // 2026-08-15 优化：先从 localStorage 立即返回（5min 内不阻塞首屏）
                     const cachedList = lsCacheGet('qa_list');
@@ -2342,6 +2355,10 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                         isConnected.value = false;
                     } finally {
                         isLoading.value = false;
+                        // 2026-09-21: 同步成功后, 1.5s 后开始预加载所有 quote 完整数据 (C)
+                        if (isConnected.value && !preloading.value) {
+                            setTimeout(() => preloadAllQuotes(), 1500);
+                        }
                     }
                 };
 
@@ -2373,6 +2390,64 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                         alert('同步失败：' + error.message);
                     } finally {
                         isSyncingFromCloud.value = false;
+                    }
+                };
+
+                // 2026-09-21: 性能优化 A — 后台云端同步 (fire-and-forget, 不阻塞 UI)
+                // 调用即返回, 同步在后台跑, 失败也只是更新 pendingCloudSyncs 状态
+                const backgroundSyncQuote = async (projNo, fullData) => {
+                    const syncId = Date.now() + '_' + projNo;
+                    pendingCloudSyncs.value.push({ id: syncId, projNo, startedAt: Date.now(), status: 'syncing' });
+                    try {
+                        if (!navigator.onLine) {
+                            pendingCloudSyncs.value.find(s => s.id === syncId).status = 'offline';
+                            return;
+                        }
+                        const payload = clone(fullData);
+                        const result = await gasCall('save_check_quote', { projNo, quoteData: payload }, 'POST');
+                        if (result.success) {
+                            // 同步成功 — 从 pending 移除, 更新内存缓存
+                            const idx = pendingCloudSyncs.value.findIndex(s => s.id === syncId);
+                            if (idx >= 0) pendingCloudSyncs.value.splice(idx, 1);
+                            quoteFullCache.set(projNo, clone(fullData));
+                            console.log('[bgSync] OK', projNo);
+                        } else {
+                            pendingCloudSyncs.value.find(s => s.id === syncId).status = 'failed: ' + (result.message || 'unknown');
+                            console.warn('[bgSync] failed', projNo, result.message);
+                        }
+                    } catch (e) {
+                        pendingCloudSyncs.value.find(s => s.id === syncId).status = 'failed: ' + e.message;
+                        console.error('[bgSync] error', projNo, e);
+                    }
+                };
+
+                // 2026-09-21: 性能优化 C — 列表加载完后后台预加载所有 quote 完整数据
+                // 串行 fetch (避免 GAS 限流), 每 200ms 一个; 用户无感知
+                const preloadAllQuotes = async () => {
+                    if (preloading.value) return;
+                    if (!navigator.onLine) return;
+                    const list = listData.value;
+                    if (!list || list.length === 0) return;
+                    preloading.value = true;
+                    console.log('[preload] starting for', list.length, 'quotes');
+                    try {
+                        for (const item of list) {
+                            if (quoteFullCache.has(item.projNo)) continue;  // 已在缓存
+                            try {
+                                const result = await gasCall('get_check_quote', { projNo: item.projNo });
+                                if (result.success && result.quote) {
+                                    const fullData = buildNewDataFromRaw(result.quote, item.projNo);
+                                    quoteFullCache.set(item.projNo, fullData);
+                                }
+                            } catch (e) {
+                                console.warn('[preload] failed', item.projNo, e.message);
+                            }
+                            // GAS 限流保护 — 每条间隔 200ms
+                            await new Promise(r => setTimeout(r, 200));
+                        }
+                        console.log('[preload] done, cache size:', quoteFullCache.size);
+                    } finally {
+                        preloading.value = false;
                     }
                 };
 
@@ -3110,6 +3185,26 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 };
 
                 const openEdit = async (row) => {
+                    // 2026-09-21: 性能优化 B — 先查内存缓存 (毫秒级)
+                    if (quoteFullCache.has(row.projNo)) {
+                        editData.value = clone(quoteFullCache.get(row.projNo));
+                        editData.value._dataSource = 'memory-cache';
+                        // 缓存命中: 走完 sections 初始化 + 显示弹窗, 然后返回
+                        sections.customer = false;
+                        sections.salesPerson = false;
+                        sections.items = false;
+                        const cachedC = editData.value.commission || {};
+                        const cachedHasCommission = ['sales', 'subSales', 'measurer', 'designer', 'manager']
+                            .some(role => (cachedC[role]?.percent || 0) > 0);
+                        sections.commission = !cachedHasCommission;
+                        sections.actualCost = !(editData.value.actualCost?.entries?.length > 0);
+                        sections.designFee = !(editData.value.designFee?.entries?.length > 0);
+                        sections.installFee = !(editData.value.installFee?.entries?.length > 0);
+                        sections.logisticsFee = !(editData.value.logisticsFee?.entries?.length > 0);
+                        sections.loss = !(editData.value.loss?.entries?.length > 0);
+                        editDialogVisible.value = true;
+                        return;
+                    }
                     // 2026-09-15: 优先本地 IDB（一直有用户最新编辑），云端作为 fallback
                     // 之前 bug: 云端无数据时（比如之前 structuredClone 保存失败），editData 全空
                     const localCached = await getQuoteFromLocal(row.projNo);
@@ -3122,6 +3217,8 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                         }
                         editData.value = clone(localCached);
                         editData.value._dataSource = 'local';
+                        // 缓存到内存
+                        quoteFullCache.set(row.projNo, clone(localCached));
                     } else {
                         // 在线：本地有完整数据 → 用本地的（用户编辑过的话云端可能没保存成功）
                         //          本地无数据 → 才从云端拉
@@ -3129,6 +3226,8 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                         if (localCached && isCompleteData(localCached)) {
                             editData.value = clone(localCached);
                             editData.value._dataSource = 'local';
+                            // 缓存到内存
+                            quoteFullCache.set(row.projNo, clone(localCached));
                         } else {
                             // 本地不完整或不存在 → 从云端拉
                             try {
@@ -3144,6 +3243,8 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                                     editData.value = clone(editObj);
                                     editData.value._dataSource = 'cloud';
                                     usedSource = 'cloud';
+                                    // 缓存到内存
+                                    quoteFullCache.set(row.projNo, clone(editObj));
                                 } else {
                                     // 云端也没有 → 用本地（哪怕不完整），至少给用户看
                                     if (localCached) {
@@ -3523,6 +3624,7 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                 };
 
                 // 2026-08-28: 加 try/catch + isSaving 锁 + 离线时仍允许本地保存
+                // 2026-09-21: 性能优化 A — 云端同步改后台 (fire-and-forget), 弹窗立即关闭
                 const isSaving = ref(false);
                 const saveProject = async () => {
                     console.log('[saveProject] start, editData:', editData.value);
@@ -3554,46 +3656,19 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                         }
                         console.log('[saveProject] local update done, listData len:', listData.value.length);
 
-                        // 1. 先写本地（永远成功）
+                        // 1. 先写本地（永远成功, 50ms 内）
                         lsCacheSet('qa_list', listData.value);
                         await saveToLocal(listData.value);
                         await saveQuoteToLocal(editData.value);
+                        // 更新内存缓存 (B)
+                        quoteFullCache.set(projNo, clone(editData.value));
                         console.log('[saveProject] local save OK');
 
-                        // 2. 尝试云端（失败也不阻塞）
-                        let cloudOk = false;
-                        let cloudMsg = '';
-                        if (navigator.onLine) {
-                            try {
-                                const payload = clone(editData.value);
-                                const result = await gasCall('save_check_quote', {
-                                    projNo: projNo,
-                                    quoteData: payload
-                                }, 'POST');
-                                console.log('[saveProject] cloud result:', result);
-                                if (result.success) {
-                                    cloudOk = true;
-                                } else {
-                                    cloudMsg = result.message || '未知错误';
-                                }
-                            } catch (e) {
-                                cloudMsg = e.message;
-                                console.error('[saveProject] cloud sync error:', e);
-                            }
-                        } else {
-                            cloudMsg = '当前离线（navigator.onLine=false）';
-                        }
-
-                        // 3. 关闭弹窗 + 反馈
+                        // 2. 关闭弹窗 — 不再 await 云端, 立即关闭让用户体验快 (A)
                         editDialogVisible.value = false;
-                        if (cloudOk) {
-                            // 成功 — 不弹 alert 阻塞
-                            console.log('[saveProject] saved to cloud + local');
-                        } else {
-                            // 本地存了，云端失败 — 告诉用户但仍关闭弹窗
-                            console.warn('[saveProject] local saved, cloud failed:', cloudMsg);
-                            alert('已保存到本地，云端同步失败（' + cloudMsg + '）\n\n联网后可手动重试保存。');
-                        }
+
+                        // 3. 后台云端同步 (fire-and-forget, 不阻塞 UI)
+                        backgroundSyncQuote(projNo, editData.value);
                     } catch (e) {
                         // 任何未预料错误 — 弹 alert 让用户看到
                         console.error('[saveProject] FATAL:', e);
@@ -3674,6 +3749,8 @@ function bi(e,t){const n=ss(e);class s extends Si{constructor(e){super(n,e,t)}}r
                     // 2026-09-20: print-to-PDF (单条 — 浏览器原生打印对话框)
                     printOne,
                     isSyncingFromCloud, lastSyncTime, formatSyncTime,
+                    // 2026-09-21: 性能优化 — 后台同步状态 + 预加载状态
+                    pendingCloudSyncs, preloading,
                     addCostEntry, removeCostEntry, addDesignEntry, removeDesignEntry, addInstallEntry, removeInstallEntry, addLogisticsEntry, removeLogisticsEntry, addLossEntry, removeLossEntry, logout,
                     // 2026-09-15: 重新加载 — 数据丢失手动恢复
                     reloadMenuOpen, reloadLoading, toggleReloadMenu, reloadFromCloud,
