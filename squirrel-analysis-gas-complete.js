@@ -1307,14 +1307,19 @@ function saveCheckQuote(projNo, quoteData) {
     // 添加保存时间戳
     quoteData.lastSaved = new Date().toISOString();
 
-    // 删除旧文件
+    // 2026-09-22: 性能优化 D — 改成 setContent (in-place update)
+// 之前: setTrashed old + createFile new = 2 个 Drive 操作 + 换 file ID + 重新索引
+// 现在: 找到现有文件直接 setContent (1 个 Drive 操作, file ID 保持稳定, 写一次)
+// 文件不存在时才走 createFile 兜底
     const files = analysisFolder.getFilesByName(fileName);
-    while (files.hasNext()) {
-      files.next().setTrashed(true);
+    const content = JSON.stringify(quoteData);
+    if (files.hasNext()) {
+      // 原地覆盖, 保留 file ID
+      files.next().setContent(content);
+    } else {
+      // 文件不存在 (全新 quote), 创建
+      analysisFolder.createFile(fileName, content, 'application/json');
     }
-
-    // 2026-08-15: 去掉 null,2 — 文件小一半，parse 快一倍
-    analysisFolder.createFile(fileName, JSON.stringify(quoteData), 'application/json');
     // 失效 list 缓存（CacheService 跨调用持久 + 模块级 fallback）
     cacheRemove('qa_list_v1');
     checkQuoteListCache = null;
@@ -1370,12 +1375,13 @@ function markCheckComplete(projNo, status, username) {
     // 同步更新 lastModified
     data.lastModified = new Date().toISOString().split('T')[0];
 
-    // 写回（delete old + create new — 跟 saveCheckQuote 一致）
+    // 2026-09-22: 性能优化 D — 改成 setContent (in-place update), 跟 saveCheckQuote 一致
     const allFiles = analysisFolder.getFilesByName(fileName);
-    while (allFiles.hasNext()) {
-      allFiles.next().setTrashed(true);
+    if (allFiles.hasNext()) {
+      allFiles.next().setContent(JSON.stringify(data));
+    } else {
+      analysisFolder.createFile(fileName, JSON.stringify(data), 'application/json');
     }
-    analysisFolder.createFile(fileName, JSON.stringify(data), 'application/json');
 
     // 失效 list 缓存
     cacheRemove('qa_list_v1');
